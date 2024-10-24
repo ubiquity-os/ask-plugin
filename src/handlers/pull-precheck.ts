@@ -1,8 +1,8 @@
 import { PULL_PRECHECK_SYSTEM_MESSAGE } from "../adapters/openai/helpers/prompts";
 import { fetchPullRequestDiff } from "../helpers/issue-fetching";
+import { canPerformReview } from "../helpers/pull-helpers/can-perform-review";
 import { getTaskSpecFromPullRequest } from "../helpers/pull-helpers/get-task-spec";
 import { hasCollaboratorConvertedPr } from "../helpers/pull-helpers/has-collaborator-converted";
-import { canPerformReview } from "../helpers/pull-requests";
 import { Context, SupportedEvents } from "../types";
 import { CallbackResult } from "../types/proxy";
 import { findGroundTruths } from "./find-ground-truths";

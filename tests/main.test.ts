@@ -2,7 +2,7 @@ import { db } from "./__mocks__/db";
 import { server } from "./__mocks__/node";
 import usersGet from "./__mocks__/users-get.json";
 import { expect, describe, beforeAll, beforeEach, afterAll, afterEach, it } from "@jest/globals";
-import { Logs } from "@ubiquity-dao/ubiquibot-logger";
+import { Logs } from "@ubiquity-os/ubiquity-os-logger";
 import { Context, SupportedEventsU } from "../src/types";
 import { drop } from "@mswjs/data";
 import issueTemplate from "./__mocks__/issue-template";

@@ -1,6 +1,6 @@
-import { LogReturn, Logs } from "@ubiquity-dao/ubiquibot-logger";
+import { LogReturn, Logs } from "@ubiquity-os/ubiquity-os-logger";
 import { Context } from "../types";
-import { addCommentToIssue } from "../handlers/add-comment";
+// import { addCommentToIssue } from "../handlers/add-comment";
 export const logger = new Logs("debug");
 
 export function handleUncaughtError(error: unknown) {
@@ -24,7 +24,7 @@ export async function bubbleUpErrorComment(context: Context, err: unknown, post 
   }
 
   if (post) {
-    await addCommentToIssue(context, `${errorMessage?.logMessage.diff}\n<!--\n${sanitizeMetadata(errorMessage?.metadata)}\n-->`);
+    // await addCommentToIssue(context, `${errorMessage?.logMessage.diff}\n<!--\n${sanitizeMetadata(errorMessage?.metadata)}\n-->`);
   }
 
   return errorMessage;
