@@ -1,5 +1,5 @@
-import { Context } from "../types";
-import { CodeReviewStatus } from "../types/pull-requests";
+import { Context } from "../../types";
+import { CodeReviewStatus } from "../../types/pull-requests";
 
 export async function submitCodeReview(context: Context<"pull_request.opened" | "pull_request.ready_for_review">, review: string, status: CodeReviewStatus) {
   const { logger, payload } = context;
