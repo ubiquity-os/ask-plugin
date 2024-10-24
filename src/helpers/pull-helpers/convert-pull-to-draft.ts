@@ -1,23 +1,27 @@
-import { Context } from "../../types";
+import { Octokit } from "@octokit/rest";
 
-export async function convertPullToDraft(context: Context<"pull_request.opened" | "pull_request.ready_for_review">) {
-    const { logger, payload } = context;
-    const { number, organization, repository, action } = payload;
-    const { owner, name } = repository;
-
-    logger.info(`${organization}/${repository}#${number} - ${action}`);
-
-    try {
-        await context.octokit.pulls.update({
-            owner: owner.login,
-            repo: name,
-            pull_number: number,
-            draft: true,
-        });
-
-        logger.info("Pull request converted to draft");
-    } catch (er) {
-        throw logger.error("Failed to convert pull request to draft", { err: er });
-    }
+export async function convertPullToDraft(
+  shouldConvert: boolean,
+  params: {
+    owner: string;
+    repo: string;
+    pull_number: number;
+    octokit: Octokit;
+  }
+) {
+  if (!shouldConvert) {
+    return `No action taken. The pull request will remain in its current state.`;
+  }
+  const { owner, repo, pull_number } = params;
+  try {
+    await params.octokit.pulls.update({
+      owner,
+      repo,
+      pull_number,
+      draft: true,
+    });
+    return `Successfully converted pull request to draft mode.`;
+  } catch (err) {
+    return `Failed to convert pull request to draft mode: ${JSON.stringify(err)}`;
+  }
 }
-
