@@ -64,13 +64,13 @@ export async function askGpt(context: Context, question: string, formattedChat: 
   // const reRankedChat = formattedChat.length > 0 ? await context.adapters.voyage.reranker.reRankResults(formattedChat.filter(text => text !== ""), question, 300) : [];
   similarText = similarText.filter((text) => text !== "");
   const rerankedText = similarText.length > 0 ? await context.adapters.voyage.reranker.reRankResults(similarText, question) : [];
-  return context.adapters.openai.completions.createCompletion(
-    DEFAULT_SYSTEM_MESSAGE,
-    question,
+  return context.adapters.openai.completions.createCompletion({
+    systemMessage: DEFAULT_SYSTEM_MESSAGE,
+    prompt: question,
     model,
-    rerankedText,
-    formattedChat,
-    ["typescript", "github", "cloudflare worker", "actions", "jest", "supabase", "openai"],
-    UBIQUITY_OS_APP_NAME
-  );
+    additionalContext: rerankedText,
+    localContext: formattedChat,
+    groundTruths: ["typescript", "github", "cloudflare worker", "actions", "jest", "supabase", "openai"],
+    botName: UBIQUITY_OS_APP_NAME,
+  });
 }

@@ -39,15 +39,23 @@ export class Completions extends SuperOpenAi {
     return parts.join("\n");
   }
 
-  async createCompletion(
-    systemMessage: string,
-    prompt: string,
-    model: string = "o1-mini",
-    additionalContext: string[],
-    localContext: string[],
-    groundTruths: string[],
-    botName: string
-  ): Promise<ResponseFromLlm> {
+  async createCompletion({
+    systemMessage,
+    prompt,
+    model = "o1-mini",
+    additionalContext,
+    localContext,
+    groundTruths,
+    botName,
+  }: {
+    systemMessage: string;
+    prompt: string;
+    model: string;
+    additionalContext: string[];
+    localContext: string[];
+    groundTruths: string[];
+    botName: string;
+  }): Promise<ResponseFromLlm> {
     const res: OpenAI.Chat.Completions.ChatCompletion = await this.client.chat.completions.create({
       model: model,
       messages: [
