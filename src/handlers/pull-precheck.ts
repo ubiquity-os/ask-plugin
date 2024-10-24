@@ -6,6 +6,7 @@ import { hasCollaboratorConvertedPr } from "../helpers/pull-helpers/has-collabor
 import { Context, SupportedEvents } from "../types";
 import { CallbackResult } from "../types/proxy";
 import { findGroundTruths } from "./find-ground-truths";
+import { handleChat } from "../adapters/openai/helpers/call-handler";
 // import { handleLlmQueryOutput } from "./llm-query-output";
 
 export async function performPullPrecheck(
@@ -14,6 +15,7 @@ export async function performPullPrecheck(
   const { logger, payload } = context;
   const { pull_request } = payload;
 
+  // Check if PR is in draft mode, closed, or if we can perform a review
   if (pull_request.draft) {
     return { status: 200, reason: logger.info("PR is in draft mode, no action required").logMessage.raw };
   } else if (pull_request.state === "closed") {
@@ -27,14 +29,6 @@ export async function performPullPrecheck(
   return await handleCodeReview(context);
 }
 
-/**
-Contributor must open as draft first then ready it for review.
-Context is: issue spec and PR diff
-output: what's missing compared to the spec, review as requested changes and convert to draft. Pass = commented status.
-conditions: 
-- collaborator converts the PR, bot should not interact again
-- one review per day
- */
 export async function handleCodeReview(context: Context<"pull_request.opened" | "pull_request.ready_for_review">): Promise<CallbackResult> {
   const {
     logger,
@@ -67,8 +61,12 @@ export async function handleCodeReview(context: Context<"pull_request.opened" | 
     botName: UBIQUITY_OS_APP_NAME,
   };
 
-  const llmResponse = await context.adapters.openai.completions.createCompletion(creationOptions);
+  const llmResponse = await handleChat(context, [
+    { role: "system", content: creationOptions.systemMessage },
+    { role: "user", content: creationOptions.prompt },
+  ]);
   console.log(creationOptions, llmResponse);
   return { status: 200, reason: "Success" };
+  // const llmResponse = await context.adapters.openai.completions.createCompletion(creationOptions);
   // return handleLlmQueryOutput(context, llmResponse);
 }
