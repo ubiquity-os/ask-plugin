@@ -2,6 +2,7 @@ import { Context } from "../../types";
 import { logger } from "../../helpers/errors";
 
 export async function fetchRepoDependencies(context: Context) {
+  console.log("fetchRepoDependencies");
   const {
     octokit,
     payload: {
