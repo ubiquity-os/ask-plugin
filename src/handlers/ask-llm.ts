@@ -47,7 +47,14 @@ export async function askQuestion(context: Context, question: string) {
   }
 
   const response = await askGpt(context, question);
-  console.log(response);
+  context.logger.info(`Answer: ${response.answer}`, {
+    caller: "_Logs.<anonymous>",
+    tokenUsage: {
+      input: response.tokenUsage.input,
+      output: response.tokenUsage.output,
+      total: response.tokenUsage.total,
+    },
+  });
   return formatResponse(response);
 }
 

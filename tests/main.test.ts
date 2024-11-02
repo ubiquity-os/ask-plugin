@@ -12,6 +12,7 @@ import { runPlugin } from "../src/plugin";
 import { TransformDecodeCheckError, Value } from "@sinclair/typebox/value";
 import { envSchema } from "../src/types/env";
 import { CompletionsType } from "../src/adapters/openai/helpers/completions";
+import { findTool } from "../src/types/tools";
 
 const TEST_QUESTION = "what is pi?";
 const TEST_SLASH_COMMAND = "@UbiquityOS what is pi?";
@@ -19,6 +20,7 @@ const LOG_CALLER = "_Logs.<anonymous>";
 const ISSUE_ID_2_CONTENT = "More context here #2";
 const ISSUE_ID_3_CONTENT = "More context here #3";
 const MOCK_ANSWER = "This is a mock answer for the chat";
+const CITATIONS = "Citations:\n^1^: This is a citation [GitHub Issue](https://www.github.com/ubiquity/test-repo/issues/1)";
 
 type Comment = {
   id: number;
@@ -61,8 +63,7 @@ describe("Ask plugin tests", () => {
     const res = await askQuestion(ctx, TEST_QUESTION);
 
     expect(res).toBeDefined();
-
-    expect(res?.answer).toBe(MOCK_ANSWER);
+    expect(res).toBe(MOCK_ANSWER + "\n\n" + CITATIONS);
   });
 
   it("should not ask GPT a question if comment is from a bot", async () => {
@@ -107,8 +108,9 @@ describe("Ask plugin tests", () => {
     createComments([transformCommentTemplate(1, 1, TEST_QUESTION, "ubiquity", "test-repo", true)]);
     await runPlugin(ctx);
 
+    expect(infoSpy).toHaveBeenCalledTimes(3);
     expect(infoSpy).toHaveBeenNthCalledWith(1, `Asking question: @UbiquityOS ${TEST_QUESTION}`);
-    expect(infoSpy).toHaveBeenNthCalledWith(4, "Answer: This is a mock answer for the chat", {
+    expect(infoSpy).toHaveBeenNthCalledWith(3, "Answer: This is a mock answer for the chat", {
       caller: LOG_CALLER,
       tokenUsage: {
         input: 1000,
@@ -120,6 +122,7 @@ describe("Ask plugin tests", () => {
 
   it("should collect the linked issues correctly", async () => {
     const ctx = createContext(TEST_SLASH_COMMAND);
+    const tool = findTool("fetch_chat_history");
     const infoSpy = jest.spyOn(ctx.logger, "info");
     createComments([
       transformCommentTemplate(1, 1, ISSUE_ID_2_CONTENT, "ubiquity", "test-repo", true, "2"),
@@ -127,10 +130,12 @@ describe("Ask plugin tests", () => {
       transformCommentTemplate(3, 2, ISSUE_ID_3_CONTENT, "ubiquity", "test-repo", true, "3"),
       transformCommentTemplate(4, 3, "Just a comment", "ubiquity", "test-repo", true, "1"),
     ]);
-
+    await tool?.execute(ctx, {});
     await runPlugin(ctx);
 
-    expect(infoSpy).toHaveBeenNthCalledWith(1, `Asking question: @UbiquityOS ${TEST_QUESTION}`);
+    expect(infoSpy).toHaveBeenCalledTimes(4);
+
+    expect(infoSpy).toHaveBeenNthCalledWith(2, `Asking question: @UbiquityOS ${TEST_QUESTION}`);
 
     const prompt = `=== Current Issue #1 Specification === ubiquity/test-repo/1 ===
 
@@ -166,7 +171,7 @@ describe("Ask plugin tests", () => {
     `;
 
     const normalizedExpected = normalizeString(prompt);
-    const normalizedReceived = normalizeString(infoSpy.mock.calls[1][0] as string);
+    const normalizedReceived = normalizeString(infoSpy.mock.calls[0][0]);
 
     expect(normalizedReceived).toEqual(normalizedExpected);
   });
@@ -394,7 +399,7 @@ function createContext(body = TEST_SLASH_COMMAND) {
           createCompletion: async (): Promise<CompletionsType> => {
             return {
               answer: MOCK_ANSWER,
-              groundTruths: [MOCK_ANSWER],
+              citations: [{ reference: "^1^", description: "This is a citation", url: "https://www.github.com/ubiquity/test-repo/issues/1" }],
               tokenUsage: {
                 input: 1000,
                 output: 150,

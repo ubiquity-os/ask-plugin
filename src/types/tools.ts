@@ -98,7 +98,9 @@ export const AVAILABLE_TOOLS: Tool[] = [
         owner: context.payload.repository.owner.login,
         repo: context.payload.repository.name,
       });
-      return formatChatHistory(context, streamlinedComments, specAndBodies);
+      const chatHistory = await formatChatHistory(context, streamlinedComments, specAndBodies);
+      context.logger.info(chatHistory.join("\n"));
+      return chatHistory;
     },
   },
   {
