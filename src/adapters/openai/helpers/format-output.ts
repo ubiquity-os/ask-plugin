@@ -14,7 +14,7 @@ export class OutputFormatter {
 - Use direct, authoritative statements
 - Remove phrases like "Based on the context", "I think", "It appears"
 - Start sentences with action verbs when possible
-- Be concise yet consise.
+- Be concise.
 - Do Not Add titles to your responses.
 - Maintain technical accuracy
 - Keep existing citations intact
