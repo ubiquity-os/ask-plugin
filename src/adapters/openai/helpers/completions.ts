@@ -70,7 +70,6 @@ export class Completions extends SuperOpenAi {
 
     try {
       const result = await tool.execute(this.context, toolCall.parameters);
-      console.log("Tool result", result);
       // Handle empty results
       if (result === null || result === undefined) {
         return {
@@ -122,32 +121,68 @@ export class Completions extends SuperOpenAi {
   } {
     try {
       const response = JSON.parse(content);
+      const answer = response.answer;
+
+      // Extract citations section
+      const citationsMatch = answer.match(/##\s*Citations\s*\n([\s\S]*?)$/);
+      let mainContent = answer;
+      const citations: Citation[] = [];
+
+      if (citationsMatch) {
+        // Remove citations section from main content
+        mainContent = answer.replace(/##\s*Citations\s*\n[\s\S]*$/, "").trim();
+
+        // Parse citations
+        const citationRegex = /\[(\^[0-9]+\^)\]:\s*(.*?)(?:\s*\[(.*?)\])?(?=\n\[|$)/g;
+        const matches = citationsMatch[1].matchAll(citationRegex);
+
+        for (const match of matches) {
+          const [, reference, description, url] = match;
+          citations.push({
+            reference,
+            description: description.trim(),
+            url: url ? url.trim() : undefined,
+          });
+        }
+      }
+
       return {
-        finalAnswer: response.answer,
-        citations: response.citations,
+        finalAnswer: mainContent,
+        citations,
       };
     } catch (error) {
-      // If JSON parsing fails, try to extract citations from plain text
-      const citationRegex = /\[(\^[0-9]+\^)\]:\s*(.*?)(?=\n\[|$)/g;
+      // Fallback parsing for non-JSON responses
+      const citationRegex = /\[(\^[0-9]+\^)\]:\s*(.*?)(?:\s*\[(.*?)\])?(?=\n\[|$)/g;
       const matches = content.matchAll(citationRegex);
       const citations: Citation[] = [];
       let finalAnswer = content;
 
       for (const match of matches) {
-        const [fullMatch, reference, description] = match;
+        const [fullMatch, reference, description, url] = match;
         citations.push({
           reference,
           description: description.trim(),
-          url: undefined,
+          url: url ? url.trim() : undefined,
         });
         finalAnswer = finalAnswer.replace(fullMatch, "");
       }
+
+      // Remove "Citations" section header if present
+      finalAnswer = finalAnswer.replace(/##\s*Citations\s*\n*$/, "");
 
       return {
         finalAnswer: finalAnswer.trim(),
         citations,
       };
     }
+  }
+
+  private _removeCitationsSection(text: string): string {
+    // Remove the entire citations section if present
+    return text
+      .replace(/\n*##\s*Citations\s*\n[\s\S]*$/i, "")
+      .replace(/\n*\[\^[0-9]+\^\]:\s*.*?(?=\n\[|$)/gi, "")
+      .trim();
   }
 
   private _formatFootnoteNumber(num: number): string {
@@ -181,7 +216,7 @@ export class Completions extends SuperOpenAi {
         messages: msgs,
         model: model,
         temperature: 0.1,
-        max_tokens: 500,
+        max_tokens: 1000,
       });
 
       if (!res?.choices?.[0]?.message?.content) {
@@ -275,7 +310,6 @@ export class Completions extends SuperOpenAi {
         }
 
         if (!response.choices) {
-          console.log(response);
           this.context.logger.error("OpenAI response missing choices array");
           throw new Error("OpenAI response missing choices array");
         }
@@ -413,14 +447,29 @@ export class Completions extends SuperOpenAi {
       };
 
       try {
-        // Format the output using the new OutputFormatter with o1-mini
-        const formattedOutput = await OutputFormatter.format(completionResult, this.client);
-        const finalFormattedOutput = OutputFormatter.buildFinalOutput(formattedOutput);
+        // Clean the answer text by removing references and any existing citations section
+        let cleanedAnswer = this._removeCitationsSection(completionResult.answer);
+
+        // Remove the word "citation" from the answer text if it appears at last
+        const citationIndex = cleanedAnswer.toLowerCase().lastIndexOf("citation");
+        if (citationIndex !== -1 && citationIndex === cleanedAnswer.length - "citation".length) {
+          cleanedAnswer = cleanedAnswer.substring(0, citationIndex).trim();
+        }
+
+        // Format the cleaned answer text
+        const formattedAnswer = await OutputFormatter.format(cleanedAnswer, this.client);
+
+        // Add citations section if there are citations
+        // const formattedOutput = completionResult.citations.length > 0
+        //   ? `${formattedAnswer}\n\n## Citations\n${completionResult.citations
+        //       .map(citation => `${citation.reference}: ${citation.description}${citation.url ? ` [${citation.url}]` : ''}`)
+        //       .join('\n')}`
+        //   : formattedAnswer;
 
         // Return the formatted result
         return {
           ...completionResult,
-          answer: finalFormattedOutput,
+          answer: formattedAnswer,
         };
       } catch (formattingError) {
         this.context.logger.error(`Formatting error: ${(formattingError as Error).message}`);
@@ -464,7 +513,10 @@ export class Completions extends SuperOpenAi {
   4. fetch_ground_truths - Get repository context (ONLY after gathering discussion context)
   5. fetch_pr_diff - Get PR changes (ONLY when explicitly discussing PRs and after gathering context)
 
-  IMPORTANT:
+  MUST OBEY THE FOLLOWING RULES:
+  - Do Not Add titles to your responses.
+  - MAKE RESPONSES with CONTEXT retrieved from the tools, and not from your own knowledge.
+  - Do not make any assumptions with the context of discussions or issues.
   - ALWAYS produce CLEAN and FORMATTED responses.
   - You must ALWAYS use the first three tools (fetch_similar_comments, fetch_similar_issues, fetch_chat_history) to gather context before proceeding
   - When using fetch_similar_comments and fetch_similar_issues, ALWAYS use the complete user question as the search query
@@ -473,10 +525,12 @@ export class Completions extends SuperOpenAi {
   - Use fetch_ground_truths ONLY after you have comprehensive discussion context
   - Use fetch_pr_diff ONLY when explicitly discussing PRs and after gathering all other context
   - NEVER mention users by their usernames in your responses
-  - For each piece of information from external sources, add a reference [^01^] in your answer
-  - All URLs should include www after http:// or https:// if not already present
-  - For citations, include the exact text you are referencing from the source
-  - Do not duplicate citations or references
+  - Do not add a notes section or any additional information not directly related to the response
+  - Only add a Citations section if you have references to include.
+  - Output should be in Markdown format, without title.
+  - Citations should only be under the ## Citations header, with each citation in the format: [^01^]: Description of the citation [Source URL]
+  - DO NOT HALLUCINATE CITATIONS.
+  - If you do not have URL, DO NOT add the URL in the citation.
 
   Available Tools:
   ${availableTools}
@@ -489,29 +543,28 @@ export class Completions extends SuperOpenAi {
   ${groundTruthsText}`;
 
     const responseFormat = `Your response must follow this structured format:
-Example:
-{
-  "answer": "The feature was implemented with XP rewards based on total rewards earned [^01^].",
-  "citations": [
-    {
-      "reference": "[^01^]",
-      "description": "XP rewards as a form of payout but I think maybe not a priority",
-      "url": "https://www.github.com/..."
-    }
-  ]
-}
-  
-For Code citations:
-IMPORTANT
-- DO NOT ADD CITATIONS FOR THE CODE
-- ALWAYS add Formatted code blocks using triple backticks (\\\`\\\`\\\`);
+  IMPORTANT
+  - ALWAYS ADD citations for external sources or issue or comment references, along with the link to the source.
+  - CITATIONS should be present in a seprate header "Citations" at the end of the response, with each citation in the format: [^01^]: Description of the citation [Source URL]
+  - For CODE citations, DO NOT add citations, but always add formatted code blocks using triple backticks (\\\`\\\`\\\`)
 
-Example:
-The following code snippet adds two numbers:
-\`\`\`python
-def add(a, b):
-  return a + b
-\`\`\``;
+  Example:
+  {
+    "answer": "The feature was implemented with XP rewards based on total rewards earned [^01^]. The feature was implemented with XP rewards based on total rewards earned [^02^]
+                "## Citations \n [^01^]: Description of the citation [Github Issue](https://www.github.com/somerepo/12) \n [^02^]: Description of the citation [Github Issue](https://www.github.com/somerepo/12)",
+  }
+    
+  For Code citations:
+  IMPORTANT
+  - DO NOT ADD CITATIONS FOR THE CODE
+  - ALWAYS add Formatted code blocks using triple backticks (\\\`\\\`\\\`);
+
+  Example:
+  The following code snippet adds two numbers:
+  \`\`\`python
+  def add(a, b):
+    return a + b
+  \`\`\``;
 
     return `${baseMessage}\n\n${responseFormat}\n\nYour name is: ${botName}`;
   }

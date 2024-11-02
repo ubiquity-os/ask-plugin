@@ -1,16 +1,10 @@
-import { CompletionsType } from "./completions";
 import OpenAI from "openai";
-
-interface FormattedOutput {
-  formattedAnswer: string;
-  formattedCitations: string[];
-}
 
 export class OutputFormatter {
   private static async _formatWithO1Mini(text: string, client: OpenAI): Promise<string> {
     try {
       const response = await client.chat.completions.create({
-        model: "o1-mini",
+        model: "gpt-4o",
         messages: [
           {
             role: "system",
@@ -20,9 +14,14 @@ export class OutputFormatter {
 - Use direct, authoritative statements
 - Remove phrases like "Based on the context", "I think", "It appears"
 - Start sentences with action verbs when possible
-- Be concise and definitive
+- Be concise yet consise.
+- Do Not Add titles to your responses.
 - Maintain technical accuracy
 - Keep existing citations intact
+- Expand on technical concepts when relevant
+- Include detailed explanations for complex topics
+- Provide context for technical decisions
+- Add clarifying examples where helpful
 
 2. Formatting:
 For code:
@@ -31,18 +30,17 @@ code here
 \`\`\`
 
 For lists:
-- Main point
-- Key detail
-  - Sub-detail
-  - Sub-detail
+- Main point with detailed explanation
+  - Sub-detail with context
+  - Sub-detail with examples
 
 For headings:
-# Main Topic
+# Main Topic with Context
 
-## Sub-topic
+## Sub-topic with Details
 
 For paragraphs:
-One clear statement per paragraph.
+One clear statement per paragraph with supporting details.
 
 Add empty line between paragraphs.
 
@@ -78,6 +76,9 @@ Return only the formatted text with improved style.`,
       return `\n\n\`\`\`\n${trimmedCode}\n\`\`\`\n\n`;
     });
 
+    // Format inline code
+    formattedText = formattedText.replace(/`([^`]+)`/g, (match) => `\n${match}\n`);
+
     // Format lists
     formattedText = formattedText.replace(/^[-*]\s/gm, "\n- ");
     formattedText = formattedText.replace(/^\d+\.\s/gm, (match) => `\n${match}`);
@@ -85,22 +86,17 @@ Return only the formatted text with improved style.`,
     // Format headings
     formattedText = formattedText.replace(/^(#{1,6}\s.*?)$/gm, "\n$1\n");
 
-    // Format paragraphs
+    // Format paragraphs with improved spacing
     formattedText = formattedText
       .split("\n")
       .map((line) => line.trim())
       .filter((line) => line.length > 0)
       .join("\n\n");
 
-    // Clean up multiple newlines
+    // Clean up multiple newlines while preserving paragraph spacing
     formattedText = formattedText.replace(/\n{3,}/g, "\n\n");
 
     return formattedText.trim();
-  }
-
-  private static _formatCitation(citation: { reference: string; description: string; url?: string }): string {
-    const urlText = citation.url ? ` - [View Source](${citation.url})` : "";
-    return `${citation.reference}: ${citation.description}${urlText}`;
   }
 
   private static _removeWeakPhrases(text: string): string {
@@ -115,6 +111,11 @@ Return only the formatted text with improved style.`,
       /according to the context\s*/gi,
       /after analyzing\s*/gi,
       /based on the information\s*/gi,
+      /i believe\s*/gi,
+      /possibly\s*/gi,
+      /maybe\s*/gi,
+      /perhaps\s*/gi,
+      /i would say\s*/gi,
     ];
 
     let result = text;
@@ -125,31 +126,13 @@ Return only the formatted text with improved style.`,
     return result;
   }
 
-  public static async format(completionResult: CompletionsType, client: OpenAI): Promise<FormattedOutput> {
+  public static async format(text: string, client: OpenAI): Promise<string> {
     // First remove weak phrases
-    const strongAnswer = this._removeWeakPhrases(completionResult.answer);
+    const strongText = this._removeWeakPhrases(text);
 
-    // Format the answer using o1-mini with fallback
-    const formattedAnswer = await this._formatWithO1Mini(strongAnswer, client);
+    // Format the text using o1-mini with fallback
+    const formattedText = await this._formatWithO1Mini(strongText, client);
 
-    // Format citations
-    const formattedCitations = completionResult.citations.map(this._formatCitation);
-
-    return {
-      formattedAnswer: formattedAnswer.trim(),
-      formattedCitations,
-    };
-  }
-
-  public static buildFinalOutput(formattedOutput: FormattedOutput): string {
-    const { formattedAnswer, formattedCitations } = formattedOutput;
-
-    // If there are no citations, just return the formatted answer
-    if (formattedCitations.length === 0) {
-      return formattedAnswer;
-    }
-
-    // Build the final output with citations
-    return `${formattedAnswer}\n\n---\n\n### References\n\n${formattedCitations.join("\n\n")}`;
+    return formattedText.trim();
   }
 }
