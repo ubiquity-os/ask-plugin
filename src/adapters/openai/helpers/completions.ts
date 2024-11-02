@@ -545,7 +545,7 @@ export class Completions extends SuperOpenAi {
     const responseFormat = `Your response must follow this structured format:
   IMPORTANT
   - ALWAYS ADD citations for external sources or issue or comment references, along with the link to the source.
-  - CITATIONS should be present in a seprate header "Citations" at the end of the response, with each citation in the format: [^01^]: Description of the citation [Source URL]
+  - CITATIONS should be present in a separate header "Citations" at the end of the response, with each citation in the format: [^01^]: Description of the citation [Source URL]
   - For CODE citations, DO NOT add citations, but always add formatted code blocks using triple backticks (\\\`\\\`\\\`)
 
   Example:
