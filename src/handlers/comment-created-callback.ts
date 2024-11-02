@@ -31,14 +31,13 @@ export async function issueCommentCreatedCallback(
   let commentToPost;
   try {
     const response = await askQuestion(context, question);
-    const { answer, tokenUsage, groundTruths } = response;
+    const { answer, tokenUsage } = response;
     if (!answer) {
       throw logger.error(`No answer from OpenAI`);
     }
     logger.info(`Answer: ${answer}`, { tokenUsage });
 
     const metadata = {
-      groundTruths,
       tokenUsage,
     };
 

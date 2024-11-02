@@ -1,6 +1,6 @@
 import { Context } from "../types";
 import { CompletionsType, Citation } from "../adapters/openai/helpers/completions";
-
+import { bubbleUpErrorComment } from "../helpers/errors";
 /**
  * Formats a response with citations
  * @param response - The completion response from GPT
@@ -32,7 +32,6 @@ function formatResponse(response: CompletionsType): string {
 
   return formattedResponse;
 }
-import { bubbleUpErrorComment } from "../helpers/errors";
 
 /**
  * Asks a question to GPT and returns the response
@@ -55,7 +54,7 @@ export async function askQuestion(context: Context, question: string) {
       total: response.tokenUsage.total,
     },
   });
-  return formatResponse(response);
+  return { answer: formatResponse(response), tokenUsage: response.tokenUsage };
 }
 
 /**
@@ -70,15 +69,19 @@ export async function askGpt(context: Context, question: string): Promise<Comple
     config: { model, maxTokens },
   } = context;
 
-  //Calculate the current context size in tokens
-  const numTokens = await context.adapters.openai.completions.findTokenLength(question);
-  context.logger.info(`Number of tokens: ${numTokens}`);
+  try {
+    //Calculate the current context size in tokens
+    const numTokens = await context.adapters.openai.completions.findTokenLength(question);
+    context.logger.info(`Number of tokens: ${numTokens}`);
 
-  return context.adapters.openai.completions.createCompletion(
-    question,
-    model,
-    [], // Empty ground truths array - will be fetched by tool if needed
-    UBIQUITY_OS_APP_NAME,
-    maxTokens
-  );
+    return context.adapters.openai.completions.createCompletion(
+      question,
+      model,
+      [], // Empty ground truths array - will be fetched by tool if needed
+      UBIQUITY_OS_APP_NAME,
+      maxTokens
+    );
+  } catch (error) {
+    throw bubbleUpErrorComment(context, error, false);
+  }
 }

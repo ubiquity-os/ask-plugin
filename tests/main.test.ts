@@ -63,7 +63,7 @@ describe("Ask plugin tests", () => {
     const res = await askQuestion(ctx, TEST_QUESTION);
 
     expect(res).toBeDefined();
-    expect(res).toBe(MOCK_ANSWER + "\n\n" + CITATIONS);
+    expect(res).toStrictEqual({ answer: `${MOCK_ANSWER}\n\n${CITATIONS}`, tokenUsage: { input: 1000, output: 150, total: 1150 } });
   });
 
   it("should not ask GPT a question if comment is from a bot", async () => {
@@ -108,7 +108,7 @@ describe("Ask plugin tests", () => {
     createComments([transformCommentTemplate(1, 1, TEST_QUESTION, "ubiquity", "test-repo", true)]);
     await runPlugin(ctx);
 
-    expect(infoSpy).toHaveBeenCalledTimes(3);
+    expect(infoSpy).toHaveBeenCalledTimes(6);
     expect(infoSpy).toHaveBeenNthCalledWith(1, `Asking question: @UbiquityOS ${TEST_QUESTION}`);
     expect(infoSpy).toHaveBeenNthCalledWith(3, "Answer: This is a mock answer for the chat", {
       caller: LOG_CALLER,
@@ -133,7 +133,7 @@ describe("Ask plugin tests", () => {
     await tool?.execute(ctx, {});
     await runPlugin(ctx);
 
-    expect(infoSpy).toHaveBeenCalledTimes(4);
+    expect(infoSpy).toHaveBeenCalledTimes(7);
 
     expect(infoSpy).toHaveBeenNthCalledWith(2, `Asking question: @UbiquityOS ${TEST_QUESTION}`);
 

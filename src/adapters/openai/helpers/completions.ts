@@ -261,7 +261,7 @@ export class Completions extends SuperOpenAi {
       ];
 
       const toolCalls: ToolCallType[] = [];
-      let finalAnswer = "";
+      let finalAnswer: string;
       let citations: Citation[] = [];
 
       // Start conversation loop to handle tool calls
