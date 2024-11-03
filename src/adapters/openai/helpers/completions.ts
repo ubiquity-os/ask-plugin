@@ -5,19 +5,8 @@ import { logger } from "../../../helpers/errors";
 import { appendToConversation } from "./append-to-base-chat-history";
 import { getAnswerAndTokenUsage } from "./get-answer-and-token-usage";
 import { CreationParams, ResponseFromLlm, ToolCallResponse } from "../types";
-import { MAX_COMPLETION_TOKENS } from "../constants";
 import { CompletionsModelHelper, ModelApplications } from "../../../types/llm";
 import { encode } from "gpt-tokenizer";
-
-export interface CompletionsType {
-  answer: string;
-  groundTruths: string[];
-  tokenUsage: {
-    input: number;
-    output: number;
-    total: number;
-  };
-}
 
 export class Completions extends SuperOpenAi {
   protected context: Context;
@@ -63,73 +52,38 @@ export class Completions extends SuperOpenAi {
     return this.getModelMaxTokenLimit("o1-mini");
   }
 
-
   async createCompletion(
-    {
-      query,
-      model,
+    params: {
+      systemMessage: string;
+      query: string;
+      model: string;
+      additionalContext: string[];
+      localContext: string[];
+      groundTruths: string[];
+      botName: string;
+      maxTokens: number;
+    },
+    chatHistory?: OpenAI.Chat.Completions.ChatCompletionMessageParam[]
+  ): Promise<ResponseFromLlm> {
+    const { query, model, additionalContext, localContext, groundTruths, botName, maxTokens } = params;
+    logger.info(`Creating completion for model: ${model} with query: ${query}`);
+    logger.info(`Context for completion:`, {
       additionalContext,
       localContext,
       groundTruths,
       botName,
-      maxTokens,
-    }: {
-      query: string,
-      model: string,
-      additionalContext: string[],
-      localContext: string[],
-      groundTruths: string[],
-      botName: string,
-      maxTokens: number
-    }
-  ): Promise<CompletionsType> {
-    const numTokens = await this.findTokenLength(query, additionalContext, localContext, groundTruths);
-    logger.info(`Number of tokens: ${numTokens}`);
-
-    const sysMsg = [
-      "You Must obey the following ground truths: ",
-      JSON.stringify(groundTruths) + "\n",
-      "You are tasked with assisting as a GitHub bot by generating responses based on provided chat history and similar responses, focusing on using available knowledge within the provided corpus, which may contain code, documentation, or incomplete information. Your role is to interpret and use this knowledge effectively to answer user questions.\n\n# Steps\n\n1. **Understand Context**: Review the chat history and any similar provided responses to understand the context.\n2. **Extract Relevant Information**: Identify key pieces of information, even if they are incomplete, from the available corpus.\n3. **Apply Knowledge**: Use the extracted information and relevant documentation to construct an informed response.\n4. **Draft Response**: Compile the gathered insights into a coherent and concise response, ensuring it's clear and directly addresses the user's query.\n5. **Review and Refine**: Check for accuracy and completeness, filling any gaps with logical assumptions where necessary.\n\n# Output Format\n\n- Concise and coherent responses in paragraphs that directly address the user's question.\n- Incorporate inline code snippets or references from the documentation if relevant.\n\n# Examples\n\n**Example 1**\n\n*Input:*\n- Chat History: \"What was the original reason for moving the LP tokens?\"\n- Corpus Excerpts: \"It isn't clear to me if we redid the staking yet and if we should migrate. If so, perhaps we should make a new issue instead. We should investigate whether the missing LP tokens issue from the MasterChefV2.1 contract is critical to the decision of migrating or not.\"\n\n*Output:*\n\"It was due to missing LP tokens issue from the MasterChefV2.1 Contract.\n\n# Notes\n\n- Ensure the response is crafted from the corpus provided, without introducing information outside of what's available or relevant to the query.\n- Consider edge cases where the corpus might lack explicit answers, and justify responses with logical reasoning based on the existing information.",
-      `Your name is: ${botName}`,
-      "\n",
-      "Main Context (Provide additional precedence in terms of information): ",
-      localContext.join("\n"),
-      "Secondary Context: ",
-      additionalContext.join("\n"),
-    ].join("\n");
-
-    logger.info(`System message: ${sysMsg}`);
-    logger.info(`Query: ${query}`);
+    });
 
     const res: OpenAI.Chat.Completions.ChatCompletion = await this.client.chat.completions.create({
       // tools: LLM_TOOLS, might not be a good idea to have this available for the general chatbot
       model: model,
-      messages: [
-        {
-          role: "system",
-          content: [
-            {
-              type: "text",
-              text: sysMsg,
-            },
-          ],
-        },
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: query,
-            },
-          ],
-        },
-      ],
+      messages: chatHistory || appendToConversation(params),
       temperature: 0.2,
       // This value is now deprecated in favor of max_completion_tokens, and is not compatible with o1 series models.
       // max_COMPLETION_tokens: MAX_COMPLETION_TOKENS,
 
       /**An upper bound for the number of tokens that can be generated for a completion, including visible output tokens and reasoning tokens. */
-      max_completion_tokens: MAX_COMPLETION_TOKENS,
+      max_completion_tokens: maxTokens,
       top_p: 0.5,
       frequency_penalty: 0,
       presence_penalty: 0,
@@ -144,7 +98,7 @@ export class Completions extends SuperOpenAi {
   }
 
   async handleFunctionCalling(res: OpenAI.Chat.Completions.ChatCompletion, params: CreationParams) {
-    const { systemMessage, prompt, model, additionalContext, localContext, groundTruths, botName } = params;
+    const { systemMessage, query, model, additionalContext, localContext, groundTruths, botName, maxTokens } = params;
     if (res.choices[0].finish_reason === "function_call") {
       const toolCalls = res.choices[0].message.tool_calls;
       const choiceMessage = res.choices[0]["message"];
@@ -218,12 +172,13 @@ export class Completions extends SuperOpenAi {
       return await this.createCompletion(
         {
           systemMessage,
-          prompt,
+          query,
           model,
           additionalContext,
           localContext,
           groundTruths,
           botName,
+          maxTokens,
         },
         newChat
       );

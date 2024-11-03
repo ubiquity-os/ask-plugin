@@ -31,11 +31,9 @@ export async function issueCommentCreatedCallback(
   }
   logger.info(`Asking question: ${question}`);
   return await handleLlmQueryOutput(context, await askQuestion(context, question));
-
-
 }
 
-function createStructuredMetadata(header: string | undefined, logReturn: LogReturn) {
+export function createStructuredMetadata(header: string | undefined, logReturn: LogReturn) {
   let logMessage, metadata;
   if (logReturn) {
     logMessage = logReturn.logMessage;

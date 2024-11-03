@@ -11,7 +11,7 @@ import { runPlugin } from "../src/plugin";
 import { TransformDecodeCheckError, Value } from "@sinclair/typebox/value";
 import { envSchema } from "../src/types/env";
 import { ResponseFromLlm } from "../src/adapters/openai/helpers/completions";
-import { CompletionsType } from "../src/adapters/openai/helpers/completions";
+import { ResponseFromLlm } from "../src/adapters/openai/helpers/completions";
 import { logger } from "../src/helpers/errors";
 
 const TEST_QUESTION = "what is pi?";
@@ -412,7 +412,7 @@ function createContext(body = TEST_SLASH_COMMAND) {
           getModelMaxOutputLimit: () => {
             return 50000;
           },
-          createCompletion: async (): Promise<CompletionsType> => {
+          createCompletion: async (): Promise<ResponseFromLlm> => {
             return {
               answer: MOCK_ANSWER,
               groundTruths: [MOCK_ANSWER],

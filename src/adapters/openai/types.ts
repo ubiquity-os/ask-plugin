@@ -6,22 +6,24 @@ export type TokenUsage = {
   input: number;
   output: number;
   total: number;
-  outputDetails?: OpenAI.Completions.CompletionUsage.CompletionTokensDetails;
+  reasoning_tokens?: number;
 };
 
 export type ResponseFromLlm = {
   answer: string;
+  groundTruths: string[];
   tokenUsage: TokenUsage;
 };
 
 export type CreationParams = {
   systemMessage: string;
-  prompt: string;
+  query: string;
   model: string;
   additionalContext: string[];
   localContext: string[];
   groundTruths: string[];
   botName: string;
+  maxTokens: number;
 };
 
 export type ToolCallResponse = {

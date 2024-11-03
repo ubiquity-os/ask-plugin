@@ -2,7 +2,7 @@ import { createSystemMessage } from "./create-system-msg";
 import { ChatHistory, CreationParams, ToolCallResponse } from "../types";
 
 export function appendToConversation(params: CreationParams, toolCallsToAppend: ToolCallResponse[] = []): ChatHistory {
-  const { systemMessage, prompt, additionalContext, localContext, groundTruths, botName } = params;
+  const { systemMessage, query, additionalContext, localContext, groundTruths, botName } = params;
   const baseChat: ChatHistory = [
     {
       role: "system",
@@ -18,7 +18,7 @@ export function appendToConversation(params: CreationParams, toolCallsToAppend: 
       content: [
         {
           type: "text",
-          text: prompt,
+          text: query,
         },
       ],
     },

@@ -1,8 +1,9 @@
-import { ResponseFromLlm } from "../adapters/openai/helpers/completions";
+import { ResponseFromLlm } from "../adapters/openai/types";
 import { bubbleUpErrorComment } from "../helpers/errors";
 import { Context } from "../types";
 import { CallbackResult } from "../types/proxy";
 import { addCommentToIssue } from "./add-comment";
+import { createStructuredMetadata } from "./comment-created-callback";
 
 export async function handleLlmQueryOutput(context: Context, llmResponse: ResponseFromLlm): Promise<CallbackResult> {
   const { logger } = context;
@@ -12,7 +13,6 @@ export async function handleLlmQueryOutput(context: Context, llmResponse: Respon
       throw logger.error(`No answer from OpenAI`);
     }
     logger.info(`Answer: ${answer}`, { tokenUsage });
-    const tokens = `\n\n<!--\n${JSON.stringify(tokenUsage, null, 2)}\n--!>`;
 
     const metadataString = createStructuredMetadata(
       // don't change this header, it's used for tracking
