@@ -2,7 +2,6 @@ import { db } from "./__mocks__/db";
 import { server } from "./__mocks__/node";
 import usersGet from "./__mocks__/users-get.json";
 import { expect, describe, beforeAll, beforeEach, afterAll, afterEach, it } from "@jest/globals";
-import { Logs } from "@ubiquity-os/ubiquity-os-logger";
 import { Context, SupportedEventsU } from "../src/types";
 import { drop } from "@mswjs/data";
 import issueTemplate from "./__mocks__/issue-template";
@@ -12,12 +11,15 @@ import { runPlugin } from "../src/plugin";
 import { TransformDecodeCheckError, Value } from "@sinclair/typebox/value";
 import { envSchema } from "../src/types/env";
 import { ResponseFromLlm } from "../src/adapters/openai/helpers/completions";
+import { CompletionsType } from "../src/adapters/openai/helpers/completions";
+import { logger } from "../src/helpers/errors";
 
 const TEST_QUESTION = "what is pi?";
 const TEST_SLASH_COMMAND = "@UbiquityOS what is pi?";
 const LOG_CALLER = "_Logs.<anonymous>";
 const ISSUE_ID_2_CONTENT = "More context here #2";
 const ISSUE_ID_3_CONTENT = "More context here #3";
+const MOCK_ANSWER = "This is a mock answer for the chat";
 
 type Comment = {
   id: number;
@@ -38,6 +40,23 @@ type Comment = {
 const octokit = jest.requireActual("@octokit/rest");
 jest.requireActual("openai");
 
+// extractDependencies
+
+jest.mock("../src/handlers/ground-truths/chat-bot", () => {
+  return {
+    fetchRepoDependencies: jest.fn().mockReturnValue({
+      dependencies: {},
+      devDependencies: {},
+    }),
+    extractDependencies: jest.fn(),
+    // [string, number][]
+    fetchRepoLanguageStats: jest.fn().mockReturnValue([
+      ["JavaScript", 100],
+      ["TypeScript", 200],
+    ]),
+  };
+});
+
 beforeAll(() => {
   server.listen();
 });
@@ -51,6 +70,7 @@ afterAll(() => server.close());
 
 describe("Ask plugin tests", () => {
   beforeEach(async () => {
+    jest.clearAllMocks();
     await setupTests();
   });
 
@@ -61,7 +81,7 @@ describe("Ask plugin tests", () => {
 
     expect(res).toBeDefined();
 
-    expect(res?.answer).toBe("This is a mock answer for the chat");
+    expect(res?.answer).toBe(MOCK_ANSWER);
   });
 
   it("should not ask GPT a question if comment is from a bot", async () => {
@@ -93,7 +113,7 @@ describe("Ask plugin tests", () => {
     createComments([transformCommentTemplate(1, 1, TEST_QUESTION, "ubiquity", "test-repo", true)]);
     await runPlugin(ctx);
 
-    expect(infoSpy).toHaveBeenCalledWith("Comment is empty. Skipping.");
+    expect(infoSpy).toHaveBeenCalledWith("No question provided. Skipping.");
   });
   it("Should throw if OPENAI_API_KEY is not defined", () => {
     const settings = {};
@@ -101,24 +121,6 @@ describe("Ask plugin tests", () => {
   });
 
   it("should construct the chat history correctly", async () => {
-    const ctx = createContext(TEST_SLASH_COMMAND);
-    const infoSpy = jest.spyOn(ctx.logger, "info");
-    createComments([transformCommentTemplate(1, 1, TEST_QUESTION, "ubiquity", "test-repo", true)]);
-    await runPlugin(ctx);
-
-    expect(infoSpy).toHaveBeenCalledTimes(4);
-    expect(infoSpy).toHaveBeenNthCalledWith(1, `Asking question: @UbiquityOS ${TEST_QUESTION}`);
-    expect(infoSpy).toHaveBeenNthCalledWith(3, "Answer: This is a mock answer for the chat", {
-      caller: LOG_CALLER,
-      tokenUsage: {
-        input: 1000,
-        output: 150,
-        total: 1150,
-      },
-    });
-  });
-
-  it("should collect the linked issues correctly", async () => {
     const ctx = createContext(TEST_SLASH_COMMAND);
     const infoSpy = jest.spyOn(ctx.logger, "info");
     createComments([
@@ -129,48 +131,59 @@ describe("Ask plugin tests", () => {
     ]);
 
     await runPlugin(ctx);
-
-    expect(infoSpy).toHaveBeenCalledTimes(4);
-
-    expect(infoSpy).toHaveBeenNthCalledWith(1, `Asking question: @UbiquityOS ${TEST_QUESTION}`);
-
-    const prompt = `=== Current Issue #1 Specification === ubiquity/test-repo/1 ===
+    const prompt = `=== Current Task Specification === ubiquity/test-repo/1 ===
 
     This is a demo spec for a demo task just perfect for testing.
-    === End Current Issue #1 Specification ===
 
-    === Current Issue #1 Conversation === ubiquity/test-repo #1 ===
+    === End Current Task Specification === ubiquity/test-repo/1 ===
+
+    === Current Task Conversation === ubiquity/test-repo/1 ===
 
     1 ubiquity: ${ISSUE_ID_2_CONTENT} [#2](https://www.github.com/ubiquity/test-repo/issues/2)
     2 ubiquity: ${TEST_QUESTION} [#1](https://www.github.com/ubiquity/test-repo/issues/1)
-    === End Current Issue #1 Conversation ===
+    === End Current Task Conversation === ubiquity/test-repo/1 ===
 
-    === Linked Issue #2 Specification === ubiquity/test-repo/2 ===
+    === README === ubiquity/test-repo/1 === 
+    
+    {"content":"This is a mock README file"} 
+
+    === End README === ubiquity/test-repo/1 ===
+
+    === Linked Task Specification === ubiquity/test-repo/2 ===
 
     Related to issue #3
-    === End Linked Issue #2 Specification ===
+    === End Linked Task Specification === ubiquity/test-repo/2 ===
 
-    === Linked Issue #2 Conversation === ubiquity/test-repo #2 ===
+    === Linked Task Conversation === ubiquity/test-repo/2 ===
 
     3 ubiquity: ${ISSUE_ID_3_CONTENT} [#3](https://www.github.com/ubiquity/test-repo/issues/3)
-    === End Linked Issue #2 Conversation ===
+    === End Linked Task Conversation === ubiquity/test-repo/2 ===
 
-   === Linked Issue #3 Specification === ubiquity/test-repo/3 ===
+   === Linked Task Specification === ubiquity/test-repo/3 ===
 
     Just another issue
-    === End Linked Issue #3 Specification ===
+    === End Linked Task Specification === ubiquity/test-repo/3 ===
 
-    === Linked Issue #3 Conversation === ubiquity/test-repo #3 ===
+    === Linked Task Conversation === ubiquity/test-repo/3 ===
 
     4 ubiquity: Just a comment [#1](https://www.github.com/ubiquity/test-repo/issues/1)
-    4 ubiquity: Just a comment [#1](https://www.github.com/ubiquity/test-repo/issues/1)
-    === End Linked Issue #3 Conversation ===\n
-    `;
+    === End Linked Task Conversation === ubiquity/test-repo/3 ===`;
 
     const normalizedExpected = normalizeString(prompt);
-    const normalizedReceived = normalizeString(infoSpy.mock.calls[1][0]);
+    const normalizedReceived = normalizeString(infoSpy.mock.calls[0][0] as string);
 
     expect(normalizedReceived).toEqual(normalizedExpected);
+    expect(infoSpy).toHaveBeenNthCalledWith(2, "Answer: This is a mock answer for the chat", {
+      caller: LOG_CALLER,
+      metadata: {
+        tokenUsage: {
+          input: 1000,
+          output: 150,
+          total: 1150,
+        },
+        groundTruths: ["This is a mock answer for the chat"],
+      },
+    });
   });
 });
 
@@ -187,7 +200,7 @@ function transformCommentTemplate(commentId: number, issueNumber: number, body: 
       login: "ubiquity",
       type: "User",
     },
-    body: TEST_QUESTION,
+    body: body,
     url: "https://api.github.com/repos/ubiquity/test-repo/issues/comments/1",
     html_url: "https://www.github.com/ubiquity/test-repo/issues/1",
     owner: "ubiquity",
@@ -268,7 +281,7 @@ function createContext(body = TEST_SLASH_COMMAND) {
     },
     owner: "ubiquity",
     repo: "test-repo",
-    logger: new Logs("debug"),
+    logger: logger,
     config: {},
     env: {
       UBIQUITY_OS_APP_NAME: "UbiquityOS",
@@ -393,15 +406,28 @@ function createContext(body = TEST_SLASH_COMMAND) {
       },
       openai: {
         completions: {
-          createCompletion: async (): Promise<ResponseFromLlm> => {
+          getModelMaxTokenLimit: () => {
+            return 50000;
+          },
+          getModelMaxOutputLimit: () => {
+            return 50000;
+          },
+          createCompletion: async (): Promise<CompletionsType> => {
             return {
-              answer: "This is a mock answer for the chat",
+              answer: MOCK_ANSWER,
+              groundTruths: [MOCK_ANSWER],
               tokenUsage: {
                 input: 1000,
                 output: 150,
                 total: 1150,
               },
             };
+          },
+          findTokenLength: async () => {
+            return 1000;
+          },
+          createGroundTruthCompletion: async (): Promise<string> => {
+            return `["${MOCK_ANSWER}"]`;
           },
         },
       },

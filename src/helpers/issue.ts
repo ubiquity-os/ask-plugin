@@ -58,13 +58,31 @@ export function splitKey(key: string): [string, string, string] {
  * @param params - Additional parameters that may include context information.
  * @returns An array of linked issues or null if no issues are found.
  */
-export function idIssueFromComment(comment?: string | null): LinkedIssues[] | null {
-  const urlMatch = comment?.match(/https?:\/\/(?:www\.)?github\.com\/([^/]+)\/([^/]+)\/(pull|issues?)\/(\d+)/g);
+export function idIssueFromComment(comment?: string | null, params?: FetchParams): LinkedIssues[] | null {
+  const urlMatch = comment?.match(/https:\/\/(?:www\.)?github.com\/([^/]+)\/([^/]+)\/(pull|issue|issues)\/(\d+)/g);
   const response: LinkedIssues[] = [];
 
   if (urlMatch) {
     urlMatch.forEach((url) => {
       response.push(createLinkedIssueOrPr(url));
+    });
+  }
+
+  /**
+   * These can only reference issues within the same repository
+   * so params works here
+   */
+  const hashMatch = comment?.match(/#(\d+)/g);
+  if (hashMatch && hashMatch.length > 0) {
+    hashMatch.forEach((hash) => {
+      const issueNumber = hash.replace("#", "");
+      // the HTML comment in the PR template
+      if (issueNumber === "1234" && comment?.includes("You must link the issue number e.g.")) {
+        return;
+      }
+      const owner = params?.context.payload.repository?.owner?.login || "";
+      const repo = params?.context.payload.repository?.name || "";
+      response.push({ body: undefined, owner, repo, issueNumber: parseInt(issueNumber), url: `https://github.com/${owner}/${repo}/issues/${issueNumber}` });
     });
   }
 
@@ -85,6 +103,7 @@ function createLinkedIssueOrPr(url: string): LinkedIssues {
     repo,
     issueNumber: parseInt(issueNumber),
     url,
+    body: undefined,
   };
 }
 
@@ -150,7 +169,7 @@ export async function fetchCodeLinkedFromIssue(
           return { body: content, id: parsedUrl.path };
         }
       } catch (error) {
-        console.error(`Error fetching content from ${url}:`, error);
+        logger.error(`Error fetching content from ${url}:`, { er: error });
       }
       return null;
     })
@@ -165,61 +184,6 @@ export async function fetchCodeLinkedFromIssue(
       issueUrl: url,
       user: context.payload.sender,
     }));
-}
-
-/**
- * Optimizes the context strings by removing duplicates and sorting by information density.
- * Removes exact duplicates and sorts by information density and length.
- *
- * @param strings - The array of context strings to optimize.
- * @returns The optimized array of context strings.
- */
-export function optimizeContext(strings: string[]): string[] {
-  // Helper function to clean strings while preserving links
-  function cleanString(inputString: string): string {
-    // Preserve links by temporarily replacing them
-    const links: string[] = [];
-    inputString = inputString.replace(/https?:\/\/\S+/g, (match) => {
-      links.push(match);
-      return `__LINK${links.length - 1}__`;
-    });
-    // Clean the string
-    inputString = inputString
-      .replace(/[^\w\s-/]|_/g, "") // Remove punctuation except '-' and '/'
-      .replace(/\s+/g, " ")
-      .trim()
-      .toLowerCase();
-    // Restore links
-    inputString = inputString.replace(/__LINK(\d+)__/g, (i) => links[parseInt(i)]);
-
-    return inputString;
-  }
-  // Helper function to calculate information density
-  function informationDensity(s: string): number {
-    const words = s.split(/\s+/);
-    const uniqueWords = new Set(words);
-    return uniqueWords.size / words.length;
-  }
-  // Clean and remove empty strings
-  const cleanedStrings = strings.map(cleanString).filter((s) => s.length > 0);
-  // Remove exact duplicates
-  const uniqueStrings = Array.from(new Set(cleanedStrings));
-  // Sort strings by information density and length
-  uniqueStrings.sort((a, b) => {
-    const densityDiff = informationDensity(b) - informationDensity(a);
-    return densityDiff !== 0 ? densityDiff : b.length - a.length;
-  });
-  const result: string[] = [];
-  const wordSet = new Set<string>();
-  for (const str of uniqueStrings) {
-    const words = str.split(/\s+/);
-    const newWords = words.filter((word) => !wordSet.has(word) && !word.startsWith("http"));
-    if (newWords.length > 0 || str.includes("http")) {
-      result.push(str);
-      newWords.forEach((word) => wordSet.add(word));
-    }
-  }
-  return result;
 }
 
 /**
