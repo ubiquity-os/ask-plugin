@@ -4,8 +4,7 @@ import { SuperOpenAi } from "./openai";
 import { CompletionsModelHelper, ModelApplications } from "../../../types/llm";
 import { encode } from "gpt-tokenizer";
 import { logger } from "../../../helpers/errors";
-import { calculateCompletionScore, createWeightTable } from "../../../handlers/rlhf/completions-scorer";
-const MAX_RETRY = 3;
+import { createWeightTable } from "../../../handlers/rlhf/completions-scorer";
 
 export interface CompletionsType {
   answer: string;
@@ -152,19 +151,8 @@ export class Completions extends SuperOpenAi {
     botName: string,
     maxTokens: number
   ): Promise<CompletionsType> {
-    for (let currentTry = 0; currentTry < MAX_RETRY; currentTry++) {
-      try {
-        const weightPrompt = await createWeightTable(this.context);
-        const solution = await this.createCompletion(query, model, additionalContext, localContext, groundTruths, botName, maxTokens, weightPrompt);
-        const currentTotalWeight = await calculateCompletionScore(solution, this.context);
-        if (currentTotalWeight >= minResultWeight) {
-          return solution;
-        }
-      } catch (error) {
-        logger.error(`Error creating completion: ${error}`);
-      }
-    }
-    return defaultCompletionsType;
+    const weightPrompt = await createWeightTable(this.context);
+    return await this.createCompletion(query, model, additionalContext, localContext, groundTruths, botName, maxTokens, weightPrompt);
   }
 
   async createGroundTruthCompletion<TApp extends ModelApplications>(
