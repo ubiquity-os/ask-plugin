@@ -4,6 +4,8 @@ import { SuperOpenAi } from "./openai";
 import { CompletionsModelHelper, ModelApplications } from "../../../types/llm";
 import { encode } from "gpt-tokenizer";
 import { logger } from "../../../helpers/errors";
+import { calculateCompletionScore, createWeightTable } from "../../../handlers/rlhf/completions-scorer";
+const MAX_RETRY = 3;
 
 export interface CompletionsType {
   answer: string;
@@ -14,7 +16,15 @@ export interface CompletionsType {
     total: number;
   };
 }
-
+export const defaultCompletionsType: CompletionsType = {
+  answer: "",
+  groundTruths: [],
+  tokenUsage: {
+    input: 0,
+    output: 0,
+    total: 0,
+  },
+};
 export class Completions extends SuperOpenAi {
   protected context: Context;
 
@@ -66,7 +76,8 @@ export class Completions extends SuperOpenAi {
     localContext: string[],
     groundTruths: string[],
     botName: string,
-    maxTokens: number
+    maxTokens: number,
+    weightPrompt: string = ""
   ): Promise<CompletionsType> {
     const numTokens = await this.findTokenLength(query, additionalContext, localContext, groundTruths);
     logger.info(`Number of tokens: ${numTokens}`);
@@ -74,7 +85,9 @@ export class Completions extends SuperOpenAi {
     const sysMsg = [
       "You Must obey the following ground truths: ",
       JSON.stringify(groundTruths) + "\n",
-      "You are tasked with assisting as a GitHub bot by generating responses based on provided chat history and similar responses, focusing on using available knowledge within the provided corpus, which may contain code, documentation, or incomplete information. Your role is to interpret and use this knowledge effectively to answer user questions.\n\n# Steps\n\n1. **Understand Context**: Review the chat history and any similar provided responses to understand the context.\n2. **Extract Relevant Information**: Identify key pieces of information, even if they are incomplete, from the available corpus.\n3. **Apply Knowledge**: Use the extracted information and relevant documentation to construct an informed response.\n4. **Draft Response**: Compile the gathered insights into a coherent and concise response, ensuring it's clear and directly addresses the user's query.\n5. **Review and Refine**: Check for accuracy and completeness, filling any gaps with logical assumptions where necessary.\n\n# Output Format\n\n- Concise and coherent responses in paragraphs that directly address the user's question.\n- Incorporate inline code snippets or references from the documentation if relevant.\n\n# Examples\n\n**Example 1**\n\n*Input:*\n- Chat History: \"What was the original reason for moving the LP tokens?\"\n- Corpus Excerpts: \"It isn't clear to me if we redid the staking yet and if we should migrate. If so, perhaps we should make a new issue instead. We should investigate whether the missing LP tokens issue from the MasterChefV2.1 contract is critical to the decision of migrating or not.\"\n\n*Output:*\n\"It was due to missing LP tokens issue from the MasterChefV2.1 Contract.\n\n# Notes\n\n- Ensure the response is crafted from the corpus provided, without introducing information outside of what's available or relevant to the query.\n- Consider edge cases where the corpus might lack explicit answers, and justify responses with logical reasoning based on the existing information.",
+      "You are tasked with assisting as a GitHub bot by generating responses based on provided chat history supported by the phrases ",
+      weightPrompt + "\n",
+      "and similar responses, focusing on using available knowledge within the provided corpus, which may contain code, documentation, or incomplete information. Your role is to interpret and use this knowledge effectively to answer user questions.\n\n# Steps\n\n1. **Understand Context**: Review the chat history and any similar provided responses to understand the context.\n2. **Extract Relevant Information**: Identify key pieces of information, even if they are incomplete, from the available corpus.\n3. **Apply Knowledge**: Use the extracted information and relevant documentation to construct an informed response.\n4. **Draft Response**: Compile the gathered insights into a coherent and concise response, ensuring it's clear and directly addresses the user's query.\n5. **Review and Refine**: Check for accuracy and completeness, filling any gaps with logical assumptions where necessary.\n\n# Output Format\n\n- Concise and coherent responses in paragraphs that directly address the user's question.\n- Incorporate inline code snippets or references from the documentation if relevant.\n\n# Examples\n\n**Example 1**\n\n*Input:*\n- Chat History: \"What was the original reason for moving the LP tokens?\"\n- Corpus Excerpts: \"It isn't clear to me if we redid the staking yet and if we should migrate. If so, perhaps we should make a new issue instead. We should investigate whether the missing LP tokens issue from the MasterChefV2.1 contract is critical to the decision of migrating or not.\"\n\n*Output:*\n\"It was due to missing LP tokens issue from the MasterChefV2.1 Contract.\n\n# Notes\n\n- Ensure the response is crafted from the corpus provided, without introducing information outside of what's available or relevant to the query.\n- Consider edge cases where the corpus might lack explicit answers, and justify responses with logical reasoning based on the existing information.",
       `Your name is: ${botName}`,
       "\n",
       "Main Context (Provide additional precedence in terms of information): ",
@@ -126,25 +139,39 @@ export class Completions extends SuperOpenAi {
         tokenUsage: { input: res.usage.prompt_tokens, output: res.usage.completion_tokens, total: res.usage.total_tokens },
       };
     }
-    return { answer: "", tokenUsage: { input: 0, output: 0, total: 0 }, groundTruths };
+    return defaultCompletionsType;
+  }
+
+  async createCompletionWithHF(
+    minResultWeight: number,
+    query: string,
+    model: string = "o1-mini",
+    additionalContext: string[],
+    localContext: string[],
+    groundTruths: string[],
+    botName: string,
+    maxTokens: number
+  ): Promise<CompletionsType> {
+    for (let currentTry = 0; currentTry < MAX_RETRY; currentTry++) {
+      try {
+        const weightPrompt = await createWeightTable(this.context);
+        const solution = await this.createCompletion(query, model, additionalContext, localContext, groundTruths, botName, maxTokens, weightPrompt);
+        const currentTotalWeight = await calculateCompletionScore(solution, this.context);
+        if (currentTotalWeight >= minResultWeight) {
+          return solution;
+        }
+      } catch (error) {
+        logger.error(`Error creating completion: ${error}`);
+      }
+    }
+    return defaultCompletionsType;
   }
 
   async createGroundTruthCompletion<TApp extends ModelApplications>(
-    context: Context,
     groundTruthSource: string,
     systemMsg: string,
     model: CompletionsModelHelper<TApp>
   ): Promise<string | null> {
-    const {
-      env: { OPENAI_API_KEY },
-      config: { openAiBaseUrl },
-    } = context;
-
-    const openAi = new OpenAI({
-      apiKey: OPENAI_API_KEY,
-      ...(openAiBaseUrl && { baseURL: openAiBaseUrl }),
-    });
-
     const msgs = [
       {
         role: "system",
@@ -156,7 +183,7 @@ export class Completions extends SuperOpenAi {
       },
     ] as OpenAI.Chat.Completions.ChatCompletionMessageParam[];
 
-    const res = await openAi.chat.completions.create({
+    const res = await this.client.chat.completions.create({
       messages: msgs,
       model: model,
     });

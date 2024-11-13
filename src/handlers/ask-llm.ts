@@ -72,11 +72,11 @@ export async function askLlm(context: Context, question: string, formattedChat: 
     }
 
     if (groundTruths.length === 3) {
-      return await completions.createCompletion(question, model, rerankedText, formattedChat, groundTruths, UBIQUITY_OS_APP_NAME, maxTokens);
+      return await completions.createCompletionWithHF(10, question, model, rerankedText, formattedChat, groundTruths, UBIQUITY_OS_APP_NAME, maxTokens);
     }
 
     groundTruths = await findGroundTruths(context, "chat-bot", { languages, dependencies, devDependencies });
-    return await completions.createCompletion(question, model, rerankedText, formattedChat, groundTruths, UBIQUITY_OS_APP_NAME, maxTokens);
+    return await completions.createCompletionWithHF(10, question, model, rerankedText, formattedChat, groundTruths, UBIQUITY_OS_APP_NAME, maxTokens);
   } catch (error) {
     throw bubbleUpErrorComment(context, error, false);
   }
