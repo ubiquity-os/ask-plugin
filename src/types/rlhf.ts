@@ -2,7 +2,7 @@
 
 export interface Phrase {
   text: string;
-  type: "trigram" | "bigram";
+  type: "trigram" | "bigram" | "unigram";
 }
 
 export interface CompletionsReaction {

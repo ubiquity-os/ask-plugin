@@ -1,4 +1,5 @@
 import { issueCommentCreatedCallback } from "../handlers/comment-created-callback";
+import { issueCommentEditedCallback } from "../handlers/comment-edited-callback";
 import { Context, SupportedEvents } from "../types";
 import { CallbackResult, ProxyCallbacks } from "../types/proxy";
 import { bubbleUpErrorComment } from "./errors";
@@ -12,9 +13,10 @@ import { bubbleUpErrorComment } from "./errors";
  */
 const callbacks = {
   "issue_comment.created": [issueCommentCreatedCallback],
+  "issue_comment.edited": [issueCommentEditedCallback],
 } as ProxyCallbacks;
 
-export async function callCallbacks(context: Context, eventName: SupportedEvents): Promise<CallbackResult> {
+export async function callCallbacks<T extends SupportedEvents>(context: Context<T>, eventName: T): Promise<CallbackResult> {
   if (!callbacks[eventName]) {
     context.logger.info(`No callbacks found for event ${eventName}`);
     return { status: 204, reason: "skipped" };

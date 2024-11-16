@@ -9,24 +9,21 @@
 import { Context } from "../../types/context";
 import { Phrase } from "../../types/rlhf";
 
-export async function updatePhraseScoreEdit(trigram: Phrase, context: Context, scoringMultiplier: number, isAddition: boolean) {
+export async function updatePhraseScoreEdit(phrase: Phrase, context: Context, scoringMultiplier: number, isAddition: boolean) {
   const {
     adapters: { supabase },
     payload: { comment },
   } = context;
-  /// The phrase should be of type tri-gram
-  if (trigram.type !== "trigram") {
-    throw new Error("Phrase should be a trigram");
-  }
   /// Get the Comment Node Id for the trigram
   const commentNodeId = comment.node_id;
 
   /// Update the weight for the trigram
-  const weight = await supabase.weights.getWeight(trigram.text);
+  const weight = await supabase.weights.getWeight(phrase.text);
+  context.logger.info(`Weight for trigram ${phrase.text} is ${weight}`);
   if (isAddition) {
-    await supabase.weights.setWeight(trigram.text, weight + scoringMultiplier, commentNodeId);
+    await supabase.weights.setWeight(phrase.text, weight + scoringMultiplier, commentNodeId);
   } else {
-    await supabase.weights.setWeight(trigram.text, weight - scoringMultiplier, commentNodeId);
+    await supabase.weights.setWeight(phrase.text, weight - scoringMultiplier, commentNodeId);
   }
 }
 

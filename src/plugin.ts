@@ -20,7 +20,7 @@ export async function plugin(context: Context) {
   context.adapters = createAdapters(supabase, voyageClient, openaiClient, context);
 
   if (context.command) {
-    return await issueCommentCreatedCallback(context);
+    return await issueCommentCreatedCallback(context as Context<"issue_comment.created">);
   }
   return await callCallbacks(context, context.eventName);
 }

@@ -129,7 +129,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION set_weight(phrase: TEXT, weight: DECIMAL, commentNodeId: VARCHAR)
+CREATE OR REPLACE FUNCTION set_weight(phrase TEXT, weight DECIMAL, commentNodeId VARCHAR)
 RETURNS VOID AS $$
 BEGIN
     INSERT INTO weights (weight, phrase, comment_node_id)

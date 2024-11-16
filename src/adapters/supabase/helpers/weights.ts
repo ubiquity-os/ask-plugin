@@ -18,23 +18,25 @@ export class Weights extends SuperSupabase {
     /// Use trigram search to get the weight for the given phrase
     /// Weight vectors would be valid within a org/repo context. Issue ?
     const { data, error } = await this.supabase.rpc("get_weight", {
-      phrase: phrase,
+      input_phrase: phrase,
     });
     if (error) {
+      this.context.logger.error(error.message || "Error getting weight for phrase");
       throw new Error(`Error getting weight for phrase: ${phrase}`);
     }
-    return data[0].weight || 0;
+    return data || 0;
   }
 
   /// Set the weight for the given phrase
   async setWeight(phrase: string, weight: number, commentNodeId: string) {
     /// Set the weight for the given phrase
     const { error } = await this.supabase.rpc("set_weight", {
-      phrase: phrase,
+      inputphrase: phrase,
       weight: weight,
-      commentNodeId: commentNodeId,
+      commentnodeid: commentNodeId,
     });
     if (error) {
+      this.context.logger.error(error.message || "Error setting weight for phrase");
       throw new Error(`Error setting weight for phrase: ${phrase}`);
     }
   }
