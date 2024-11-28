@@ -1,54 +1,36 @@
-/// Implementation of the socring module for the completions.
-
 import { CompletionsType } from "../../adapters/openai/helpers/completions";
-import { WeightTableResult } from "../../adapters/supabase/helpers/weights";
 import { Context } from "../../types/context";
-import { splitIntoTrigrams } from "./phrase-scorer";
+import { StreamlinedComment } from "../../types/llm";
+import { calculateTextScore, calculateTrigramWeights } from "../../helpers/trigram-weights";
 
-/// Given a Phrase Check if overall weight of the phrase is
-export async function calculateCompletionScore(completion: CompletionsType, context: Context): Promise<number> {
-  let score = 0;
+/**
+ * Calculate a score for a completion based on weighted comments
+ */
+export async function calculateCompletionScore(completion: CompletionsType, context: Context, weightedComments: StreamlinedComment[]): Promise<number> {
   const { answer } = completion;
-  const trigrams = splitIntoTrigrams(answer);
-  if (trigrams.length === 0) {
-    throw new Error("No trigrams found in the completion");
-  } else {
-    const {
-      adapters: { supabase },
-    } = context;
-    for (const trigram of trigrams) {
-      const weight = await supabase.weights.getWeight(trigram);
-      score += weight;
-    }
-  }
-  return score;
+  return calculateTextScore(answer, weightedComments);
 }
 
-/// Create a structured representation of the phrase weight table
-export async function createWeightTable(context: Context) {
-  const {
-    adapters: { supabase },
-  } = context;
-  const weights = await supabase.weights.getAllWeights();
-  if (!weights) {
-    throw new Error("Error getting weights");
-  }
-  /// Create a structured representation of the weights
+/**
+ * Create a structured representation of the trigram weights
+ */
+export async function createWeightTable(weightedComments: StreamlinedComment[]) {
+  const weights = calculateTrigramWeights(weightedComments);
   const table = formatWeightTable(weights);
   return weightTableToString(table);
 }
 
-function formatWeightTable(data: WeightTableResult[]): string[][] {
-  const table = [["Phrase Word Table"], ["word", "score", "nature"], ["----------------------------------------"]];
+function formatWeightTable(weights: Map<string, number>): string[][] {
+  const table = [["Trigram Weight Table"], ["trigram", "score", "nature"], ["----------------------------------------"]];
 
-  for (const weight of data) {
+  for (const [trigram, weight] of weights.entries()) {
     let nature = "NEUTRAL";
-    if (weight.weight > 0) {
+    if (weight > 0) {
       nature = "POSITIVE";
-    } else if (weight.weight < 0) {
+    } else if (weight < 0) {
       nature = "NEGATIVE";
     }
-    table.push([weight.phrase, weight.weight.toString(), nature]);
+    table.push([trigram, weight.toFixed(2), nature]);
   }
   return table;
 }

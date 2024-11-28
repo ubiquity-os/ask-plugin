@@ -6,6 +6,35 @@ export type IssueComments = RestEndpointMethodTypes["issues"]["listComments"]["r
 export type ReviewComments = RestEndpointMethodTypes["pulls"]["listReviewComments"]["response"]["data"][0];
 export type User = RestEndpointMethodTypes["users"]["getByUsername"]["response"]["data"];
 
+export type Reaction = {
+  id: number;
+  node_id: string;
+  user: Partial<User>;
+  content: "+1" | "-1" | "laugh" | "confused" | "heart" | "hooray" | "rocket" | "eyes";
+  created_at: string;
+};
+
+export type CommentEdit = {
+  created_at: string;
+  updated_at: string;
+  body: string;
+};
+
+export type SimplifiedComment = {
+  user: Partial<User> | null;
+  body?: string | null;
+  id: string;
+  org: string;
+  repo: string;
+  issueUrl: string;
+};
+
+export type WeightedComment = SimplifiedComment & {
+  weight: number;
+  reactions: Reaction[];
+  edits: CommentEdit[];
+};
+
 export type FetchParams = {
   context: Context;
   issueNum?: number;
@@ -19,20 +48,12 @@ export type LinkedIssues = {
   owner: string;
   url: string;
   comments?: SimplifiedComment[] | null | undefined;
-  body: string | undefined | null;
-};
-
-export type SimplifiedComment = {
-  user: Partial<User> | null;
-  body: string | undefined | null;
-  id: string;
-  org: string;
-  repo: string;
-  issueUrl: string;
+  body?: string | null;
+  context: Context;
 };
 
 export type FetchedCodes = {
-  body: string | undefined;
+  body?: string;
   user: Partial<User> | null;
   issueUrl: string;
   id: string;

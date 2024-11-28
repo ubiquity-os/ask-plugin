@@ -37,7 +37,17 @@ export async function fetchLinkedIssues(params: FetchParams) {
 
   const issueKey = createKey(issue.html_url);
   const [owner, repo, issueNumber] = splitKey(issueKey);
-  const linkedIssues: LinkedIssues[] = [{ body: issue.body, comments, issueNumber: parseInt(issueNumber), owner, repo, url: issue.html_url }];
+  const linkedIssues: LinkedIssues[] = [
+    {
+      body: issue.body,
+      comments,
+      issueNumber: parseInt(issueNumber),
+      owner,
+      repo,
+      url: issue.html_url,
+      context: params.context,
+    },
+  ];
   const specAndBodies: Record<string, string> = {};
   const seen = new Set<string>([issueKey]);
 
@@ -74,6 +84,7 @@ export async function fetchLinkedIssues(params: FetchParams) {
         specAndBodies[linkedKey] = fetchedIssue?.body;
         linkedIssue.body = fetchedIssue?.body;
         linkedIssue.comments = fetchedComments;
+        linkedIssue.context = params.context;
         linkedIssues.push(linkedIssue);
       }
     }

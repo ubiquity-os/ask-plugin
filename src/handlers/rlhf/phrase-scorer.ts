@@ -8,25 +8,32 @@
 
 import { Context } from "../../types/context";
 import { Phrase } from "../../types/rlhf";
+import { calculateTextScore } from "../../helpers/trigram-weights";
+import { StreamlinedComment } from "../../types/llm";
 
-export async function updatePhraseScoreEdit(phrase: Phrase, context: Context, scoringMultiplier: number, isAddition: boolean) {
-  const {
-    adapters: { supabase },
-    payload: { comment },
-  } = context;
-  /// Get the Comment Node Id for the trigram
-  const commentNodeId = comment.node_id;
+/// Update scores for phrases based on edits and reactions
+/// Now uses the new weights system based on reactions and edits history
+export async function updatePhraseScoreEdit(
+  phrase: Phrase,
+  context: Context,
+  weightedComments: StreamlinedComment[],
+  scoringMultiplier: number,
+  isAddition: boolean
+) {
+  /// Calculate current score using the weighted comments system
+  const currentScore = calculateTextScore(phrase.text, weightedComments);
 
-  /// Update the weight for the trigram
-  const weight = await supabase.weights.getWeight(phrase.text);
-  context.logger.info(`Weight for trigram ${phrase.text} is ${weight}`);
-  if (isAddition) {
-    await supabase.weights.setWeight(phrase.text, weight + scoringMultiplier, commentNodeId);
-  } else {
-    await supabase.weights.setWeight(phrase.text, weight - scoringMultiplier, commentNodeId);
-  }
+  /// Update the weight based on the edit action
+  const newScore = isAddition ? currentScore + scoringMultiplier : currentScore - scoringMultiplier;
+
+  context.logger.info(`Updated score for phrase "${phrase.text}": ${currentScore} -> ${newScore}`);
+
+  return newScore;
 }
 
+/// Split text into trigrams for scoring
+/// This function creates both word-level and character-level trigrams
+/// to capture both semantic and character patterns
 export function splitIntoTrigrams(phrase: string): string[] {
   // Normalize the text: lowercase and remove special characters
   const normalized = phrase.toLowerCase().replace(/[^a-z0-9\s]/g, "");
