@@ -1,0 +1,50 @@
+name: Run Braintrust Evals
+
+on:
+  workflow_run:
+    workflows: ["Knip"]
+    types:
+      - completed
+
+permissions: write-all
+
+jobs:
+  eval:
+    name: Run evals
+    runs-on: ubuntu-latest
+    permissions: write-all
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      VOYAGEAI_API_KEY: ${{ secrets.VOYAGEAI_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      UBIQUITY_OS_APP_NAME: "ubiquity-agent"  # Hardcoded value
+
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.10.0"
+
+      - uses: actions/checkout@master
+        with:
+          fetch-depth: 0
+
+      - name: Install Dependencies
+        id: install
+        run: yarn install --immutable --immutable-cache --check-cache
+
+      - name: Run Evals
+        id: evals
+        run: yarn eval
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          VOYAGEAI_API_KEY: ${{ secrets.VOYAGEAI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          UBIQUITY_OS_APP_NAME: "ubiquity-agent"  # Hardcoded value
+
+      - name: Add Evals Report to Github Comment
+        if: always()
+        run: echo "$(cat llm.evals.md)" >> $GITHUB_STEP_SUMMARY
