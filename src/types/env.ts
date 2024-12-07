@@ -12,6 +12,7 @@ dotenv.config();
  */
 export const envSchema = T.Object({
   OPENAI_API_KEY: T.String(),
+  ANTHROPIC_API_KEY: T.String(),
   UBIQUITY_OS_APP_NAME: T.String({ default: "UbiquityOS" }),
   VOYAGEAI_API_KEY: T.String(),
   SUPABASE_URL: T.String(),

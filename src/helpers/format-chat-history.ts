@@ -13,8 +13,8 @@ export async function formatChatHistory(
   // At this point really we should have all the context we can obtain but we try again just in case
   const keys = new Set([...Object.keys(streamlined), ...Object.keys(specAndBodies), createKey(context.payload.issue.html_url)]);
   const tokenLimits: TokenLimits = {
-    modelMaxTokenLimit: context.adapters.openai.completions.getModelMaxTokenLimit(context.config.model),
-    maxCompletionTokens: context.config.maxTokens || context.adapters.openai.completions.getModelMaxOutputLimit(context.config.model),
+    modelMaxTokenLimit: context.adapters.openai.completions.getModelMaxTokenLimit(context.config.openAiModel),
+    maxCompletionTokens: context.config.maxTokens || context.adapters.openai.completions.getModelMaxOutputLimit(context.config.openAiModel),
     runningTokenCount: 0,
     tokensRemaining: 0,
   };
@@ -47,6 +47,26 @@ export async function formatChatHistory(
   );
 
   return Array.from(new Set(chatHistory)).filter((x): x is string => !!x);
+}
+
+export async function formatSpecAndPull(context: Context, specAndBodies: Record<string, string>): Promise<string[]> {
+  const tokenLimits: TokenLimits = {
+    modelMaxTokenLimit: context.adapters.openai.completions.getModelMaxTokenLimit(context.config.openAiModel),
+    maxCompletionTokens: context.config.maxTokens || context.adapters.openai.completions.getModelMaxOutputLimit(context.config.openAiModel),
+    runningTokenCount: 0,
+    tokensRemaining: 0,
+  };
+
+  // what we start out with
+  tokenLimits.tokensRemaining = tokenLimits.modelMaxTokenLimit - tokenLimits.maxCompletionTokens;
+
+  const chatHistory = await createPullSpecContextBlockSection({
+    context,
+    specAndBodies,
+    tokenLimits,
+  });
+
+  return Array.from(new Set([chatHistory])).filter((x): x is string => !!x);
 }
 
 // These give structure and provide the distinction between the different sections of the chat history
@@ -166,6 +186,52 @@ async function createContextBlockSection({
   // Build the block with the diff in it's own section
   const blockWithDiff = [block.join("\n"), createHeader(`Pull Request Diff`, key), diff, createFooter(`Pull Request Diff`, key)];
   return [await context.adapters.openai.completions.findTokenLength(blockWithDiff.join("")), blockWithDiff.join("\n")];
+}
+
+async function createPullSpecContextBlockSection({
+  context,
+  specAndBodies,
+  tokenLimits,
+}: {
+  context: Context;
+  specAndBodies: Record<string, string>;
+  tokenLimits: TokenLimits;
+}): Promise<string> {
+  const key = createKey(context.payload.issue.html_url);
+  const [org, repo, issueNum] = key.split("/");
+
+  const issueNumber = parseInt(issueNum);
+  if (!issueNumber || isNaN(issueNumber)) {
+    throw context.logger.error("Issue number is not valid");
+  }
+
+  // Fetch our diff if we have one; this excludes the largest of files to keep within token limits
+  const { diff } = await fetchPullRequestDiff(context, org, repo, issueNumber, tokenLimits);
+  if (!diff) {
+    throw context.logger.error("Error fetching the pull difference, aborting");
+  }
+  // specification or pull request body
+  let specOrBody = specAndBodies[key];
+  // we should have it already but just in case
+  if (!specOrBody) {
+    specOrBody =
+      (
+        await fetchIssue({
+          context,
+          owner: org,
+          repo,
+          issueNum: issueNumber,
+        })
+      )?.body || "No specification or body available";
+  }
+
+  const specHeader = getCorrectHeaderString(diff, true, false); // === Current Task Specification ===
+  // contains the actual spec or body
+  const specBlock = [createHeader(specHeader, key), createSpecOrBody(specOrBody), createFooter(specHeader, key)];
+  const block = [specBlock.join("\n")];
+  // Build the block with the diff in it's own section
+  const blockWithDiff = [block.join("\n"), createHeader(`Pull Request Diff`, key), diff, createFooter(`Pull Request Diff`, key)];
+  return blockWithDiff.join("\n");
 }
 
 function createHeader(content: string, repoString: string) {

@@ -9,8 +9,10 @@ import { StaticDecode, Type as T } from "@sinclair/typebox";
  */
 
 export const pluginSettingsSchema = T.Object({
-  model: T.String({ default: "o1-mini" }),
+  openAiModel: T.String({ default: "o1-mini" }),
   openAiBaseUrl: T.Optional(T.String()),
+  anthropicAiModel: T.String({ default: "claude-3.5-sonnet" }),
+  anthropicAiBaseUrl: T.Optional(T.String()),
   similarityThreshold: T.Number({ default: 0.9 }),
   maxTokens: T.Number({ default: 10000 }),
 });

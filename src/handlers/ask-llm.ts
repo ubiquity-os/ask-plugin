@@ -25,10 +25,14 @@ export async function askQuestion(context: Context, question: string) {
   return await askLlm(context, question, formattedChat);
 }
 
+// export async function pullReview(context: Context){
+
+// }
+
 export async function askLlm(context: Context, question: string, formattedChat: string[]): Promise<CompletionsType> {
   const {
     env: { UBIQUITY_OS_APP_NAME },
-    config: { model, similarityThreshold, maxTokens },
+    config: { openAiModel, similarityThreshold, maxTokens },
     adapters: {
       supabase: { comment, issue },
       voyage: { reranker },
@@ -72,11 +76,11 @@ export async function askLlm(context: Context, question: string, formattedChat: 
     }
 
     if (groundTruths.length === 3) {
-      return await completions.createCompletion(question, model, rerankedText, formattedChat, groundTruths, UBIQUITY_OS_APP_NAME, maxTokens);
+      return await completions.createCompletion(question, openAiModel, rerankedText, formattedChat, groundTruths, UBIQUITY_OS_APP_NAME, maxTokens);
     }
 
     groundTruths = await findGroundTruths(context, "chat-bot", { languages, dependencies, devDependencies });
-    return await completions.createCompletion(question, model, rerankedText, formattedChat, groundTruths, UBIQUITY_OS_APP_NAME, maxTokens);
+    return await completions.createCompletion(question, openAiModel, rerankedText, formattedChat, groundTruths, UBIQUITY_OS_APP_NAME, maxTokens);
   } catch (error) {
     throw bubbleUpErrorComment(context, error, false);
   }
