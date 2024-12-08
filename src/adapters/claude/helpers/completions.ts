@@ -57,9 +57,6 @@ export class AnthropicCompletion extends SuperAnthropic {
     const query =
       "Perform code review using the diff and spec and output a JSON format with key: 'confidenceThreshold' (0-1). A 0 indicates that the code review failed and 1 mean its passed";
 
-    const numTokens = await this.findTokenLength(query, [], localContext, groundTruths);
-    this.context.logger.info(`Number of tokens: ${numTokens}`);
-
     const sysMsg = [
       "You Must obey the following ground truths: ",
       JSON.stringify(groundTruths) + "\n",
@@ -78,13 +75,11 @@ export class AnthropicCompletion extends SuperAnthropic {
       messages: [
         {
           role: "user",
-          content:
-            "Perform code review using the diff and spec and output a JSON format with key: 'confidenceThreshold' (0-1). A 0 indicates that the code review failed and 1 mean its passed",
+          content: query,
         },
       ],
       max_tokens: maxTokens,
-      temperature: 0.2,
-      top_p: 0.5,
+      temperature: 0,
     });
 
     // Use type guard to safely handle the response
@@ -95,8 +90,10 @@ export class AnthropicCompletion extends SuperAnthropic {
 
     const answer = content.text;
 
-    const inputTokens = await this.findTokenLength(sysMsg);
-    const outputTokens = await this.findTokenLength(answer);
+    const inputTokens = res.usage.input_tokens;
+    const outputTokens = res.usage.output_tokens;
+
+    this.context.logger.info(`Number of tokens used: ${inputTokens + outputTokens}`);
 
     return {
       answer,

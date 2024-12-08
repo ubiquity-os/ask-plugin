@@ -29,16 +29,25 @@ export async function handleCodeReview(context: Context<"pull_request.opened" | 
   const { payload } = context;
 
   const pullReviewData = await pullReview(context);
+
   let confidenceThreshold: number;
   try {
-    const pullReviewAnswer = JSON.parse(pullReviewData.answer) as { confidenceThreshold: number };
-    if ("confidenceThreshold" in pullReviewAnswer) {
-      confidenceThreshold = pullReviewAnswer.confidenceThreshold;
-    } else {
-      throw context.logger.error("Unexpectdly recieved an invalid json resukt, Aborting");
+    const parsedInput: { confidenceThreshold: number } = JSON.parse(
+      pullReviewData.answer.replace(/'/g, '"').replace(/({|,)\s*([a-zA-Z0-9_]+)\s*:/g, '$1"$2":')
+    );
+
+    if (!("confidenceThreshold" in parsedInput)) {
+      throw context.logger.error("Missing required key: confidenceThreshold got ", parsedInput);
     }
+
+    const value = parsedInput.confidenceThreshold;
+    if (typeof value !== "number" && typeof value !== "string") {
+      throw context.logger.error("Invalid value type for confidenceThreshold got ", value);
+    }
+
+    confidenceThreshold = typeof value === "string" ? Number(value) : value;
   } catch (e) {
-    throw context.logger.error("Unexpectdly recieved a non json compatible result, Aborting", { e });
+    throw context.logger.error(`Couldnt parse JSON output, Aborting`, { e });
   }
 
   context.logger.info(
