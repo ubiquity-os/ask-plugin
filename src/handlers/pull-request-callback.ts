@@ -21,8 +21,6 @@ export async function performPullPrecheck(context: Context<"pull_request.opened"
     return { status: 200, reason: logger.info("Collaborator has converted the PR, no action required").logMessage.raw };
   }
   await handleCodeReview(context);
-
-  return { status: 200, reason: logger.info("HEY").logMessage.raw };
 }
 
 export async function handleCodeReview(context: Context<"pull_request.opened" | "pull_request.ready_for_review">) {
