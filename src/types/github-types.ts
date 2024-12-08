@@ -12,7 +12,6 @@ export type FetchParams = {
   owner?: string;
   repo?: string;
 };
-
 export type LinkedIssues = {
   issueNumber: number;
   repo: string;

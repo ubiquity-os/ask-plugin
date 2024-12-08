@@ -5,5 +5,5 @@ export function chatBotPayloadTypeguard(payload: unknown): payload is AppParamsH
 }
 
 export function codeReviewPayloadTypeguard(payload: unknown): payload is AppParamsHelper<"code-review"> {
-  return typeof payload === "object" && payload !== null && "taskSpecification" in payload && "codeReviewModelPrompt" in payload;
+  return typeof payload === "object" && payload !== null && "taskSpecification" in payload;
 }

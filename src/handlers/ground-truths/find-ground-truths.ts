@@ -14,7 +14,6 @@ export async function findGroundTruths<TApp extends ModelApplications = ModelApp
   const systemMsgObj = GROUND_TRUTHS_SYSTEM_MESSAGES[application];
 
   // params are deconstructed to show quickly what's being passed to the function
-
   if (chatBotPayloadTypeguard(params)) {
     const { dependencies, devDependencies, languages } = params;
     return findChatBotTruths(context, { dependencies, devDependencies, languages }, systemMsgObj);
@@ -52,6 +51,7 @@ async function findCodeReviewTruths(
     },
   } = context;
   const systemMsg = createGroundTruthSysMsg(systemMsgObj);
+
   const truths = await completions.createGroundTruthCompletion<"code-review">(context, params.taskSpecification, systemMsg, "gpt-4o");
   return validateGroundTruths(truths);
 }

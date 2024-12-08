@@ -30,7 +30,7 @@ export function createAdapters(supabaseClient: SupabaseClient, voyage: VoyageAIC
       completions: new Completions(openai, context),
       super: new SuperOpenAi(openai, context),
     },
-    claude: {
+    anthropic: {
       completions: new AnthropicCompletion(anthropic, context),
       super: new SuperAnthropic(anthropic, context),
     },

@@ -69,7 +69,7 @@ describe("Ask plugin tests", () => {
   });
 
   it("should ask GPT a question", async () => {
-    const ctx = createContext(TEST_QUESTION);
+    const ctx = createCommentCreatedContext(TEST_QUESTION);
     createComments([transformCommentTemplate(1, 1, TEST_QUESTION, "ubiquity", "test-repo", true)]);
     const askQuestion = (await import("../src/handlers/ask-llm")).askQuestion;
     const res = await askQuestion(ctx, TEST_QUESTION);
@@ -85,7 +85,7 @@ describe("Ask plugin tests", () => {
   });
 
   it("should construct the chat history correctly", async () => {
-    const ctx = createContext(TEST_QUESTION);
+    const ctx = createCommentCreatedContext(TEST_QUESTION);
     const infoSpy = jest.spyOn(ctx.logger, "info");
     createComments([
       transformCommentTemplate(1, 1, ISSUE_ID_2_CONTENT, "ubiquity", "test-repo", true, "2"),
@@ -232,14 +232,14 @@ function createComments(comments: Comment[]) {
   }
 }
 
-function createContext(body = TEST_QUESTION) {
+function createCommentCreatedContext(body = TEST_QUESTION) {
   const user = db.users.findFirst({ where: { id: { equals: 1 } } });
   return {
     payload: {
-      issue: db.issue.findFirst({ where: { id: { equals: 1 } } }) as unknown as Context["payload"]["issue"],
+      issue: db.issue.findFirst({ where: { id: { equals: 1 } } }) as unknown as Context<"issue_comment.created">["payload"]["issue"],
       sender: user,
-      repository: db.repo.findFirst({ where: { id: { equals: 1 } } }) as unknown as Context["payload"]["repository"],
-      comment: { body, user: user } as unknown as Context["payload"]["comment"],
+      repository: db.repo.findFirst({ where: { id: { equals: 1 } } }) as unknown as Context<"issue_comment.created">["payload"]["repository"],
+      comment: { body, user: user } as unknown as Context<"issue_comment.created">["payload"]["comment"],
       action: "created" as string,
       installation: { id: 1 } as unknown as Context["payload"]["installation"],
       organization: { login: "ubiquity" } as unknown as Context["payload"]["organization"],
@@ -408,5 +408,5 @@ function createContext(body = TEST_QUESTION) {
     },
     octokit: new Octokit(),
     eventName: "issue_comment.created" as SupportedEvents,
-  } as unknown as Context;
+  } as unknown as Context<"issue_comment.created">;
 }

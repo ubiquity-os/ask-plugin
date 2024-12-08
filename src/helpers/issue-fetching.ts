@@ -7,6 +7,34 @@ import { dedupeStreamlinedComments, fetchCodeLinkedFromIssue, idIssueFromComment
 import { handleIssue, handleSpec, handleSpecAndBodyKeys, throttlePromises } from "./issue-handling";
 import { processPullRequestDiff } from "./pull-request-parsing";
 
+export function getIssueNumberFromPayload(payload: Context["payload"], fetchParams?: FetchParams): number {
+  let issueNumber, owner, repo;
+  if (!fetchParams?.issueNum) {
+    if ("issue" in payload) {
+      issueNumber = payload.issue.number;
+    }
+
+    if (!issueNumber && "pull_request" in payload) {
+      issueNumber = payload.pull_request.number;
+    }
+  } else issueNumber = fetchParams.issueNum;
+
+  // takes precedence and overrides the payload
+  if (fetchParams) {
+    owner = fetchParams.owner;
+    repo = fetchParams.repo;
+  }
+
+  if (!issueNumber) {
+    throw logger.error(`Error fetching issue`, {
+      owner: owner || payload.repository.owner.login,
+      repo: repo || payload.repository.name,
+      issue_number: issueNumber,
+    });
+  }
+  return issueNumber;
+}
+
 export async function recursivelyFetchLinkedIssues(params: FetchParams) {
   // take a first run at gathering everything we need and package it up
   const { linkedIssues, seen, specAndBodies, streamlinedComments } = await fetchLinkedIssues(params);
@@ -137,12 +165,14 @@ export async function fetchPullRequestDiff(context: Context, org: string, repo: 
 
 export async function fetchIssue(params: FetchParams): Promise<Issue | null> {
   const { octokit, payload, logger } = params.context;
-  const { issueNum, owner, repo } = params;
+  const { owner, repo } = params;
+  const issueNumber = getIssueNumberFromPayload(payload, params);
+
   try {
     const response = await octokit.rest.issues.get({
       owner: owner || payload.repository.owner.login,
       repo: repo || payload.repository.name,
-      issue_number: issueNum || payload.issue.number,
+      issue_number: issueNumber,
     });
     return response.data;
   } catch (error) {
@@ -150,7 +180,7 @@ export async function fetchIssue(params: FetchParams): Promise<Issue | null> {
       err: error,
       owner: owner || payload.repository.owner.login,
       repo: repo || payload.repository.name,
-      issue_number: issueNum || payload.issue.number,
+      issue_number: issueNumber,
     });
     return null;
   }
@@ -164,23 +194,26 @@ export async function fetchIssue(params: FetchParams): Promise<Issue | null> {
  */
 export async function fetchIssueComments(params: FetchParams) {
   const { octokit, payload, logger } = params.context;
-  const { issueNum, owner, repo } = params;
+  const { owner, repo } = params;
   const issue = await fetchIssue(params);
   let reviewComments: ReviewComments[] = [];
   let issueComments: IssueComments[] = [];
+
+  const issueNumber = getIssueNumberFromPayload(payload, params);
+
   try {
     if (issue?.pull_request) {
       const response = await octokit.rest.pulls.listReviewComments({
         owner: owner || payload.repository.owner.login,
         repo: repo || payload.repository.name,
-        pull_number: issueNum || payload.issue.number,
+        pull_number: issueNumber,
       });
       reviewComments = response.data;
 
       const response2 = await octokit.rest.issues.listComments({
         owner: owner || payload.repository.owner.login,
         repo: repo || payload.repository.name,
-        issue_number: issueNum || payload.issue.number,
+        issue_number: issueNumber,
       });
 
       issueComments = response2.data;
@@ -188,7 +221,7 @@ export async function fetchIssueComments(params: FetchParams) {
       const response = await octokit.rest.issues.listComments({
         owner: owner || payload.repository.owner.login,
         repo: repo || payload.repository.name,
-        issue_number: issueNum || payload.issue.number,
+        issue_number: issueNumber,
       });
       issueComments = response.data;
     }
@@ -197,7 +230,7 @@ export async function fetchIssueComments(params: FetchParams) {
       e,
       owner: owner || payload.repository.owner.login,
       repo: repo || payload.repository.name,
-      issue_number: issueNum || payload.issue.number,
+      issue_number: issueNumber,
     });
   }
   const comments = [...issueComments, ...reviewComments].filter((comment) => comment.user?.type !== "Bot");

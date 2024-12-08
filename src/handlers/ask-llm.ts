@@ -2,13 +2,14 @@ import { Context } from "../types";
 import { CompletionsType } from "../adapters/openai/helpers/completions";
 import { CommentSimilaritySearchResult } from "../adapters/supabase/helpers/comment";
 import { IssueSimilaritySearchResult } from "../adapters/supabase/helpers/issues";
-import { recursivelyFetchLinkedIssues } from "../helpers/issue-fetching";
-import { formatChatHistory } from "../helpers/format-chat-history";
+import { fetchIssue, recursivelyFetchLinkedIssues } from "../helpers/issue-fetching";
+import { formatChatHistory, formatSpecAndPull } from "../helpers/format-chat-history";
 import { fetchRepoDependencies, fetchRepoLanguageStats } from "./ground-truths/chat-bot";
 import { findGroundTruths } from "./ground-truths/find-ground-truths";
 import { bubbleUpErrorComment, logger } from "../helpers/errors";
+import { getTaskNumberFromPullRequest } from "../helpers/pull-helpers/get-task-spec";
 
-export async function askQuestion(context: Context, question: string) {
+export async function askQuestion(context: Context<"issue_comment.created">, question: string) {
   if (!question) {
     throw logger.error("No question provided");
   }
@@ -25,9 +26,65 @@ export async function askQuestion(context: Context, question: string) {
   return await askLlm(context, question, formattedChat);
 }
 
-// export async function pullReview(context: Context){
+export async function pullReview(context: Context<"pull_request.opened" | "pull_request.ready_for_review">) {
+  const {
+    env: { UBIQUITY_OS_APP_NAME },
+    config: { openAiModel },
+    adapters: {
+      anthropic: { completions },
+    },
+  } = context;
 
-// }
+  const taskNumber = await getTaskNumberFromPullRequest(context);
+
+  const issue = await fetchIssue({
+    context,
+    owner: context.payload.repository.owner.login,
+    repo: context.payload.repository.name,
+    issueNum: taskNumber,
+  });
+
+  if (!issue) {
+    throw logger.error(`Error fetching issue, Aborting`, {
+      owner: context.payload.repository.owner.login,
+      repo: context.payload.repository.name,
+      issue_number: taskNumber,
+    });
+  }
+
+  const taskSpecification = issue.body ?? "";
+  const formattedSpecAndPull = await formatSpecAndPull(context, issue);
+  const [languages, { dependencies, devDependencies }] = await Promise.all([fetchRepoLanguageStats(context), fetchRepoDependencies(context)]);
+
+  let groundTruths: string[] = [];
+  if (!languages.length) {
+    groundTruths.push("No languages found in the repository");
+  }
+  if (!Reflect.ownKeys(dependencies).length) {
+    groundTruths.push("No dependencies found in the repository");
+  }
+  if (!Reflect.ownKeys(devDependencies).length) {
+    groundTruths.push("No devDependencies found in the repository");
+  }
+
+  if (groundTruths.length === 3) {
+    return await completions.createCompletion(
+      openAiModel,
+      formattedSpecAndPull,
+      groundTruths,
+      UBIQUITY_OS_APP_NAME,
+      completions.getModelMaxTokenLimit(openAiModel)
+    );
+  }
+  groundTruths = await findGroundTruths(context, "code-review", { taskSpecification });
+  return await completions.createCompletion(
+    openAiModel,
+    formattedSpecAndPull,
+    groundTruths,
+    UBIQUITY_OS_APP_NAME,
+    completions.getModelMaxTokenLimit(openAiModel)
+  );
+}
 
 export async function askLlm(context: Context, question: string, formattedChat: string[]): Promise<CompletionsType> {
   const {

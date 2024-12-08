@@ -49,13 +49,15 @@ export class AnthropicCompletion extends SuperAnthropic {
 
   async createCompletion(
     model: string = "claude-3.5-sonnet",
-    additionalContext: string[],
     localContext: string[],
     groundTruths: string[],
     botName: string,
     maxTokens: number
   ): Promise<CompletionsType> {
-    const numTokens = await this.findTokenLength("", additionalContext, localContext, groundTruths);
+    const query =
+      "Perform code review using the diff and spec and output a JSON format with key: 'confidenceThreshold' (0-1). A 0 indicates that the code review failed and 1 mean its passed";
+
+    const numTokens = await this.findTokenLength(query, [], localContext, groundTruths);
     this.context.logger.info(`Number of tokens: ${numTokens}`);
 
     const sysMsg = [
@@ -66,8 +68,6 @@ export class AnthropicCompletion extends SuperAnthropic {
       "\n",
       "Main Context (Provide additional precedence in terms of information): ",
       localContext.join("\n"),
-      "Secondary Context: ",
-      additionalContext.join("\n"),
     ].join("\n");
 
     this.context.logger.info(`System message: ${sysMsg}`);
@@ -94,6 +94,7 @@ export class AnthropicCompletion extends SuperAnthropic {
     }
 
     const answer = content.text;
+
     const inputTokens = await this.findTokenLength(sysMsg);
     const outputTokens = await this.findTokenLength(answer);
 
@@ -145,7 +146,6 @@ export class AnthropicCompletion extends SuperAnthropic {
   }
 
   async findTokenLength(text: string = "", additionalContext: string[] = [], localContext: string[] = [], groundTruths: string[] = []): Promise<number> {
-    // Note: You might want to replace gpt-tokenizer with claude-specific tokenizer if available
     return encode(text + additionalContext.join("\n") + localContext.join("\n") + groundTruths.join("\n"), { disallowedSpecial: new Set() }).length;
   }
 }

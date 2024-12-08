@@ -28,6 +28,7 @@
   ],
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
+    "@octokit/graphql-schema": "^15.25.0",
     "@sinclair/typebox": "0.34.3",
     "@supabase/supabase-js": "^2.45.4",
     "@ubiquity-os/plugin-sdk": "^1.1.0",

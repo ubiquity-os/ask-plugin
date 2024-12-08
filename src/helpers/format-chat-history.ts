@@ -4,9 +4,10 @@ import { createKey, streamlineComments } from "../handlers/comments";
 import { fetchPullRequestDiff, fetchIssue, fetchIssueComments } from "./issue-fetching";
 import { pullReadmeFromRepoForIssue, splitKey } from "./issue";
 import { logger } from "./errors";
+import { Issue } from "../types/github-types";
 
 export async function formatChatHistory(
-  context: Context,
+  context: Context<"issue_comment.created">,
   streamlined: Record<string, StreamlinedComment[]>,
   specAndBodies: Record<string, string>
 ): Promise<string[]> {
@@ -49,7 +50,7 @@ export async function formatChatHistory(
   return Array.from(new Set(chatHistory)).filter((x): x is string => !!x);
 }
 
-export async function formatSpecAndPull(context: Context, specAndBodies: Record<string, string>): Promise<string[]> {
+export async function formatSpecAndPull(context: Context<"pull_request.opened" | "pull_request.ready_for_review">, issue: Issue): Promise<string[]> {
   const tokenLimits: TokenLimits = {
     modelMaxTokenLimit: context.adapters.openai.completions.getModelMaxTokenLimit(context.config.openAiModel),
     maxCompletionTokens: context.config.maxTokens || context.adapters.openai.completions.getModelMaxOutputLimit(context.config.openAiModel),
@@ -62,8 +63,8 @@ export async function formatSpecAndPull(context: Context, specAndBodies: Record<
 
   const chatHistory = await createPullSpecContextBlockSection({
     context,
-    specAndBodies,
     tokenLimits,
+    issue,
   });
 
   return Array.from(new Set([chatHistory])).filter((x): x is string => !!x);
@@ -190,14 +191,14 @@ async function createContextBlockSection({
 
 async function createPullSpecContextBlockSection({
   context,
-  specAndBodies,
   tokenLimits,
+  issue,
 }: {
-  context: Context;
-  specAndBodies: Record<string, string>;
+  context: Context<"pull_request.ready_for_review" | "pull_request.opened">;
   tokenLimits: TokenLimits;
+  issue: Issue;
 }): Promise<string> {
-  const key = createKey(context.payload.issue.html_url);
+  const key = createKey(issue.html_url);
   const [org, repo, issueNum] = key.split("/");
 
   const issueNumber = parseInt(issueNum);
@@ -206,29 +207,25 @@ async function createPullSpecContextBlockSection({
   }
 
   // Fetch our diff if we have one; this excludes the largest of files to keep within token limits
-  const { diff } = await fetchPullRequestDiff(context, org, repo, issueNumber, tokenLimits);
+  const { diff } = await fetchPullRequestDiff(context, org, repo, context.payload.pull_request.number, tokenLimits);
   if (!diff) {
     throw context.logger.error("Error fetching the pull difference, aborting");
   }
   // specification or pull request body
-  let specOrBody = specAndBodies[key];
-  // we should have it already but just in case
-  if (!specOrBody) {
-    specOrBody =
-      (
-        await fetchIssue({
-          context,
-          owner: org,
-          repo,
-          issueNum: issueNumber,
-        })
-      )?.body || "No specification or body available";
-  }
+  const specOrBody =
+    (
+      await fetchIssue({
+        context,
+        owner: org,
+        repo,
+        issueNum: issueNumber,
+      })
+    )?.body || "No specification or body available";
 
-  const specHeader = getCorrectHeaderString(diff, true, false); // === Current Task Specification ===
-  // contains the actual spec or body
+  const specHeader = "Current Task Specification";
   const specBlock = [createHeader(specHeader, key), createSpecOrBody(specOrBody), createFooter(specHeader, key)];
   const block = [specBlock.join("\n")];
+
   // Build the block with the diff in it's own section
   const blockWithDiff = [block.join("\n"), createHeader(`Pull Request Diff`, key), diff, createFooter(`Pull Request Diff`, key)];
   return blockWithDiff.join("\n");
