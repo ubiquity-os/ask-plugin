@@ -21,11 +21,18 @@
   "configuration": {
     "type": "object",
     "properties": {
-      "model": {
+      "openAiModel": {
         "default": "o1-mini",
         "type": "string"
       },
       "openAiBaseUrl": {
+        "type": "string"
+      },
+      "anthropicAiModel": {
+        "default": "claude-3.5-sonnet",
+        "type": "string"
+      },
+      "anthropicAiBaseUrl": {
         "type": "string"
       },
       "similarityThreshold": {

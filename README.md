@@ -21,8 +21,11 @@ plugins:
   - uses:
       - plugin: http://localhost:4000
         with:
-          model: ""
+          openAiModel: ""
           openAiBaseUrl: ""
+          anthropicAiModel: ""
+          anthropicAiBaseUrl: ""
+          
 ```
 
 `.dev.vars` (for local testing):
@@ -31,6 +34,7 @@ To use the Openrouter API for fetching chat history, set the `OPENROUTER_API_KEY
 
 ```sh
 OPENAI_API_KEY=your_openai_api_key
+ANTHROPIC_API_KEY=your_anthropic_api_key
 SUPABASE_URL=your_supabase_url
 SUPABASE_KEY=your_supabase_key
 VOYAGEAI_API_KEY=your_voyageai_api_key

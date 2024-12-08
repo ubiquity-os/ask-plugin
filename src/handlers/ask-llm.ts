@@ -29,7 +29,7 @@ export async function askQuestion(context: Context<"issue_comment.created">, que
 export async function pullReview(context: Context<"pull_request.opened" | "pull_request.ready_for_review">) {
   const {
     env: { UBIQUITY_OS_APP_NAME },
-    config: { openAiModel },
+    config: { anthropicAiModel },
     adapters: {
       anthropic: { completions },
     },
@@ -69,20 +69,20 @@ export async function pullReview(context: Context<"pull_request.opened" | "pull_
 
   if (groundTruths.length === 3) {
     return await completions.createCompletion(
-      openAiModel,
+      anthropicAiModel,
       formattedSpecAndPull,
       groundTruths,
       UBIQUITY_OS_APP_NAME,
-      completions.getModelMaxTokenLimit(openAiModel)
+      completions.getModelMaxTokenLimit(anthropicAiModel)
     );
   }
   groundTruths = await findGroundTruths(context, "code-review", { taskSpecification });
   return await completions.createCompletion(
-    openAiModel,
+    anthropicAiModel,
     formattedSpecAndPull,
     groundTruths,
     UBIQUITY_OS_APP_NAME,
-    completions.getModelMaxTokenLimit(openAiModel)
+    completions.getModelMaxTokenLimit(anthropicAiModel)
   );
 }
 
