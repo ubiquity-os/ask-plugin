@@ -81,6 +81,7 @@ export function streamlineComments(comments: SimplifiedComment[]) {
   for (const comment of comments) {
     const { user, issueUrl: url, body } = comment;
     if (user?.type === "Bot") continue;
+    if (comment.body?.startsWith("@UbiquityOS")) continue;
 
     const key = createKey(url);
     const [owner, repo] = splitKey(key);
