@@ -13,10 +13,6 @@ export async function askQuestion(context: Context, question: string) {
     throw logger.error("No question provided");
   }
 
-  if (question.startsWith("@UbiquityOS")) {
-    throw logger.error("Comment is not an /ask command");
-  }
-
   if (context.payload.repository.archived) {
     throw logger.error("This is an archived repository. Skipping.");
   }
