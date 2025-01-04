@@ -13,10 +13,6 @@ export async function issueCommentCreatedCallback(context: Context<"issue_commen
     throw logger.error("Comment is from a bot. Skipping.");
   }
 
-  if (payload.comment.body.startsWith("@UbiquityOS")) {
-    throw logger.error("Comment does not refer to the ask command. Skipping.");
-  }
-
   if (payload.repository.archived) {
     throw logger.error("This is an archived Repository. Skipping.");
   }
