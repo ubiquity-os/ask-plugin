@@ -1,9 +1,10 @@
 import OpenAI from "openai";
 import { Context } from "../../../types";
 import { SuperOpenAi } from "./openai";
-import { CompletionsModelHelper, ModelApplications } from "../../../types/llm";
+import { CompletionsModelHelper, ModelApplications, StreamlinedComment } from "../../../types/llm";
 import { encode } from "gpt-tokenizer";
 import { logger } from "../../../helpers/errors";
+import { createWeightTable } from "../../../handlers/rlhf/completions-scorer";
 
 export interface CompletionsType {
   answer: string;
@@ -14,6 +15,16 @@ export interface CompletionsType {
     total: number;
   };
 }
+
+export const defaultCompletionsType: CompletionsType = {
+  answer: "",
+  groundTruths: [],
+  tokenUsage: {
+    input: 0,
+    output: 0,
+    total: 0,
+  },
+};
 
 export class Completions extends SuperOpenAi {
   protected context: Context;
@@ -66,7 +77,8 @@ export class Completions extends SuperOpenAi {
     localContext: string[],
     groundTruths: string[],
     botName: string,
-    maxTokens: number
+    maxTokens: number,
+    weightPrompt: string = ""
   ): Promise<CompletionsType> {
     const numTokens = await this.findTokenLength(query, additionalContext, localContext, groundTruths);
     logger.info(`Number of tokens: ${numTokens}`);
@@ -74,7 +86,13 @@ export class Completions extends SuperOpenAi {
     const sysMsg = [
       "You Must obey the following ground truths: ",
       JSON.stringify(groundTruths) + "\n",
-      "You are tasked with assisting as a GitHub bot by generating responses based on provided chat history and similar responses, focusing on using available knowledge within the provided corpus, which may contain code, documentation, or incomplete information. Your role is to interpret and use this knowledge effectively to answer user questions.\n\n# Steps\n\n1. **Understand Context**: Review the chat history and any similar provided responses to understand the context.\n2. **Extract Relevant Information**: Identify key pieces of information, even if they are incomplete, from the available corpus.\n3. **Apply Knowledge**: Use the extracted information and relevant documentation to construct an informed response.\n4. **Draft Response**: Compile the gathered insights into a coherent and concise response, ensuring it's clear and directly addresses the user's query.\n5. **Review and Refine**: Check for accuracy and completeness, filling any gaps with logical assumptions where necessary.\n\n# Output Format\n\n- Concise and coherent responses in paragraphs that directly address the user's question.\n- Incorporate inline code snippets or references from the documentation if relevant.\n\n# Examples\n\n**Example 1**\n\n*Input:*\n- Chat History: \"What was the original reason for moving the LP tokens?\"\n- Corpus Excerpts: \"It isn't clear to me if we redid the staking yet and if we should migrate. If so, perhaps we should make a new issue instead. We should investigate whether the missing LP tokens issue from the MasterChefV2.1 contract is critical to the decision of migrating or not.\"\n\n*Output:*\n\"It was due to missing LP tokens issue from the MasterChefV2.1 Contract.\n\n# Notes\n\n- Ensure the response is crafted from the corpus provided, without introducing information outside of what's available or relevant to the query.\n- Consider edge cases where the corpus might lack explicit answers, and justify responses with logical reasoning based on the existing information.",
+      "You are tasked with assisting as a GitHub bot by generating responses based on provided chat history and weighted context. The context is weighted based on:",
+      "1. User Reactions: Positive reactions (👍, ❤️, 🎉, 🚀) increase weight, negative reactions (👎, 😕) decrease weight",
+      "2. Edit History: Comments that have been refined through edits have higher weight",
+      "3. Similarity to Current Query: Content more similar to the current question has higher weight",
+      "\nWeighted Context Table:",
+      weightPrompt + "\n",
+      "Your role is to interpret this weighted knowledge effectively to answer user questions, giving more consideration to higher-weighted content.\n\n# Steps\n\n1. **Understand Context**: Review the chat history and weighted responses, prioritizing higher-weighted content.\n2. **Extract Relevant Information**: Focus on information from highly-weighted sources, which represent community-validated content.\n3. **Apply Knowledge**: Use the extracted information, considering both content relevance and community feedback.\n4. **Draft Response**: Compile insights into a coherent response, emphasizing information from highly-weighted sources.\n5. **Review and Refine**: Ensure accuracy and alignment with the weighted context.\n\n# Output Format\n\n- Concise and coherent responses that directly address the user's question.\n- Prioritize information from highly-weighted sources.\n- Include code snippets or references when relevant.\n\n# Notes\n\n- Higher weights indicate stronger community validation through reactions and refinements.\n- Consider both the content and its weight when forming responses.\n- Balance between different sources based on their weights.",
       `Your name is: ${botName}`,
       "\n",
       "Main Context (Provide additional precedence in terms of information): ",
@@ -131,7 +149,22 @@ export class Completions extends SuperOpenAi {
         tokenUsage: { input: res.usage.prompt_tokens, output: res.usage.completion_tokens, total: res.usage.total_tokens },
       };
     }
-    return { answer: "", tokenUsage: { input: 0, output: 0, total: 0 }, groundTruths };
+    return defaultCompletionsType;
+  }
+
+  async createCompletionWithHF(
+    minResultWeight: number,
+    query: string,
+    model: string = "o1-mini",
+    additionalContext: string[],
+    localContext: string[],
+    groundTruths: string[],
+    botName: string,
+    maxTokens: number,
+    weightedComments: StreamlinedComment[] = []
+  ): Promise<CompletionsType> {
+    const weightPrompt = await createWeightTable(weightedComments);
+    return await this.createCompletion(query, model, additionalContext, localContext, groundTruths, botName, maxTokens, weightPrompt);
   }
 
   async createGroundTruthCompletion<TApp extends ModelApplications>(

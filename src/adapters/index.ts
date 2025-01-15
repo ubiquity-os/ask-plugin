@@ -10,12 +10,14 @@ import { SuperOpenAi } from "./openai/helpers/openai";
 import OpenAI from "openai";
 import { Completions } from "./openai/helpers/completions";
 import { Rerankers } from "./voyage/helpers/rerankers";
+import { Weights } from "./supabase/helpers/weights";
 
 export function createAdapters(supabaseClient: SupabaseClient, voyage: VoyageAIClient, openai: OpenAI, context: Context) {
   return {
     supabase: {
       comment: new Comment(supabaseClient, context),
       issue: new Issue(supabaseClient, context),
+      weights: new Weights(supabaseClient, context),
       super: new SuperSupabase(supabaseClient, context),
     },
     voyage: {

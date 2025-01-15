@@ -1,4 +1,5 @@
 import { GROUND_TRUTHS_SYSTEM_MESSAGES } from "../handlers/ground-truths/prompts";
+import { Reaction, CommentEdit, User } from "./github-types";
 
 export type ModelApplications = "code-review" | "chat-bot";
 
@@ -33,9 +34,9 @@ export type GroundTruthsSystemMessageTemplate = {
 };
 
 export type StreamlinedComment = {
-  id: number;
-  user?: string;
-  body?: string;
+  id: string;
+  user: Partial<User> | null;
+  body?: string | null;
   org: string;
   repo: string;
   issueUrl: string;
@@ -43,6 +44,9 @@ export type StreamlinedComment = {
     html: string;
     text: string;
   };
+  weight?: number;
+  reactions?: Reaction[];
+  edits?: CommentEdit[];
 };
 
 export type StreamlinedComments = {
