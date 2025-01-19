@@ -12,6 +12,10 @@ export async function askQuestion(context: Context, question: string) {
   if (!question) {
     throw logger.error("No question provided");
   }
+
+  if (context.payload.repository.archived) {
+    throw logger.error("This is an archived repository. Skipping.");
+  }
   // using any links in comments or issue/pr bodies to fetch more context
   const { specAndBodies, streamlinedComments } = await recursivelyFetchLinkedIssues({
     context,

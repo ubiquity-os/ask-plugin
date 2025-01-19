@@ -13,6 +13,10 @@ export async function issueCommentCreatedCallback(context: Context<"issue_commen
     throw logger.error("Comment is from a bot. Skipping.");
   }
 
+  if (payload.repository.archived) {
+    throw logger.error("This is an archived Repository. Skipping.");
+  }
+
   if (command?.name === "ask") {
     question = command.parameters.question;
   } else if (payload.comment.body.trim().startsWith("/ask")) {
